@@ -1,0 +1,36 @@
+{
+  "timezone": "Europe/Moscow",
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "schedule": {
+        "0": "19:00",
+        "1": "18:00",
+        "2": "13:00",
+        "3": "18:00"
+      }
+    }
+  },
+  "data_dir": "pult_data",
+  "prepare_lead_hours": 72,
+  "autonomous_planning": {
+    "enabled": true,
+    "run_after_hour": 7,
+    "min_lead_hours": 48,
+    "horizon_days": 10,
+    "max_new_per_run": 4
+  },
+  "max_attachment_bytes": 20971520,
+  "transcription_model": "gpt-4o-mini-transcribe",
+  "pipeline_command": [
+    "codex",
+    "exec",
+    "--skip-git-repo-check",
+    "--approve-for-me",
+    "-C",
+    "{workspace_root}",
+    "-o",
+    "{result_path}",
+    "-"
+  ]
+}

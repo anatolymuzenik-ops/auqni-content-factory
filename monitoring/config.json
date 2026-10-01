@@ -1,0 +1,21 @@
+{
+  "registry_path": "../Экосистема Аукни/Внешняя среда AUQNI/registry.json",
+  "sources": [
+    {
+      "id": "nqi",
+      "kind": "nqi_news",
+      "url": "https://nqi-russia.ru/about/news/"
+    },
+    {
+      "id": "pubmed",
+      "kind": "pubmed_eutils",
+      "query": "\"patient safety\"[Title] OR (\"quality improvement\"[Title] AND (healthcare[Title/Abstract] OR hospital[Title/Abstract]))",
+      "limit": 20
+    },
+    {
+      "id": "who",
+      "kind": "who_newsroom",
+      "url": "https://www.who.int/news-room"
+    }
+  ]
+}
