@@ -3,7 +3,10 @@
 /.*/
 
 !/.gitignore
+!/AGENTS.md
+!/PROJECT_STATE.md
 !/README.md
+!/README_VK.md
 !/pult_config.json
 !/pult_core.py
 !/pult_planner.py
@@ -15,6 +18,8 @@
 !/test_pult_store.py
 !/test_telegram_publish.py
 !/test_telegram_pult.py
+!/vk_publish.py
+!/test_vk_publish.py
 
 !/.agents/
 /.agents/**
@@ -42,6 +47,12 @@
 !/docs/editorial-policy-v1.md
 !/docs/visual-guide-auqni-content-v1.md
 !/docs/source-registry-v1.json
+!/docs/telegram-publisher-production-spec.md
+
+!/visual-references/
+/visual-references/**
+!/visual-references/brand/
+!/visual-references/brand/*.png
 
 !/examples/
 /examples/**
@@ -63,15 +74,23 @@
 **/*.sqlite
 **/*.sqlite3
 **/*.sqlite3-*
+**/*.sqlite-*
 **/*.db
 **/*.db-*
+**/pult_data/
 **/__pycache__/
 **/*.pyc
+**/*.pyo
 **/inbox/
 **/backups/
 **/*.jsonl
 **/*.log
 **/*.lock
+**/*.pid
+**/*.tmp
+**/*.temp
+**/*.bak
+**/*.swp
 **/*.ogg
 **/*.mp4
 **/editorial_state.sqlite3

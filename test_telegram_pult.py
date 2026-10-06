@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import timedelta
 from pathlib import Path
 import tempfile
 import unittest
@@ -187,7 +188,8 @@ class PultTests(unittest.TestCase):
         self.assertEqual(self.store.get(1)["kind"], "idea")
         self.callback("make:1")
         self.assertTrue(self.pult.process_one_job())
-        self.message("Перенеси №1 на 02.10.2026 19:00")
+        future_date = (utc_now() + timedelta(days=7)).strftime("%d.%m.%Y")
+        self.message(f"Перенеси №1 на {future_date} 19:00")
         self.assertEqual(self.store.get(1)["status"], "ready")
         self.message("Убери №1")
         self.assertIsNone(self.store.get(1)["channels"]["telegram"]["scheduled_at"])
@@ -240,7 +242,8 @@ class PultTests(unittest.TestCase):
     def test_schedule_configuration(self):
         slot = next_slot(SCHEDULE, [], utc_now())
         self.assertIn("T", slot)
-        moved = parse_local_time("02.10.2026 19:00")
+        future_date = (utc_now() + timedelta(days=7)).strftime("%d.%m.%Y")
+        moved = parse_local_time(f"{future_date} 19:00")
         self.assertTrue(moved.endswith("+00:00"))
 
 
