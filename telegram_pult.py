@@ -402,9 +402,11 @@ class Pult:
                           {"photo": ("satire.png", image, "image/png")})
         else:
             self.api.call("sendPhoto", {"chat_id": self.owner_id,
-                                      "caption": f"SMK_SATIRE {post_id} · версия {version}"},
+                                      "caption": "Сатира" + (f" · редакция {version}" if version > 1 else "")},
                           {"photo": ("satire.png", image, "image/png")})
             self.say(caption, [buttons])
+        if self.satire.version(post_id, version)["source"] == "editorial":
+            self.store.set_kv(f"satire_editorial_review:{post_id}:{version}", "sent")
 
     def process_one_satire_visual(self):
         if not self.satire:
@@ -416,6 +418,7 @@ class Pult:
         try:
             visual = self.satire_image_generator.run(row, role)
             self.satire.finish_visual(row["post_id"], row["version"], visual)
+            self.revise_scheduled_satire(row["post_id"])
             self.show_satire_review(row["post_id"])
         except Exception as error:
             self.satire.fail_visual(row["post_id"], row["version"])
@@ -425,6 +428,32 @@ class Pult:
                               "Пост не согласован и не будет опубликован.",
                               [[("Повторить визуал", f"satire:visual_retry:{row['post_id']}:{row['version']}")]])
         return True
+
+    def revise_scheduled_satire(self, post_id=None):
+        if not self.satire:
+            return False
+        candidates = self.satire.scheduled_editorial_candidates()
+        if post_id:
+            candidates = [row for row in candidates if row["id"] == post_id]
+        for row in candidates:
+            key = f"satire_editorial_attempt:{row['id']}:{row['current_version']}"
+            last_attempt = self.store.get_kv(key)
+            if last_attempt and datetime.fromisoformat(last_attempt) > utc_now() - timedelta(hours=1):
+                continue
+            self.store.set_kv(key, iso_utc(utc_now()))
+            try:
+                self.satire.require_visual(row["id"], row["current_version"])
+                candidate = self.satire_writer.run(row["text"], mix_type=row["mix_type"],
+                                                   preserve_opening=True)
+                self.satire.revise_scheduled_text(row["id"], row["current_version"], candidate["text"])
+            except Exception as error:
+                print(f"SMK_SATIRE editorial revision failed for {row['id']}: {type(error).__name__}",
+                      file=sys.stderr)
+                return False
+            if post_id is None:
+                self.show_satire_review(row["id"])
+            return True
+        return False
 
     def process_one_satire_submission(self):
         if not self.satire:
@@ -978,7 +1007,8 @@ class Pult:
         def worker():
             while not stop.is_set():
                 try:
-                    if not self.process_one_job() and not self.process_one_satire_submission() and not self.process_one_satire_visual():
+                    if (not self.process_one_job() and not self.process_one_satire_submission()
+                            and not self.process_one_satire_visual() and not self.revise_scheduled_satire()):
                         self.plan_autonomously()
                         stop.wait(3)
                 except Exception:
@@ -996,6 +1026,16 @@ class Pult:
         if visual_revoked:
             self.safe_say("Для ранее согласованных SMK_SATIRE готовятся новые изображения. "
                           "Прежнее согласование снято; каждый пакет потребуется принять заново.")
+        if self.satire:
+            for row in self.satire.pending_editorial_reviews():
+                key = f"satire_editorial_review:{row['id']}:{row['current_version']}"
+                if self.store.get_kv(key) == "sent":
+                    continue
+                try:
+                    self.show_satire_review(row["id"])
+                    self.store.set_kv(key, "sent")
+                except PultError:
+                    print(f"SMK_SATIRE editorial review delivery failed for {row['id']}", file=sys.stderr)
         try:
             while True:
                 self.tick()

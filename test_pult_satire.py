@@ -37,6 +37,72 @@ def prepare_bank_visual(stream, post_id, root):
 
 
 class SatireTests(unittest.TestCase):
+    def test_scheduled_bank_joke_is_expanded_before_visual_review(self):
+        class API:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, method, payload, files=None):
+                self.calls.append((method, payload))
+                return {"message_id": 1}
+
+        class Writer:
+            def run(self, idea, **kwargs):
+                self.assertions.append((idea, kwargs))
+                return {"text": idea + "\n\nЗа шуткой — задержка согласований, которая тормозит работу команды.",
+                        "genre": "СМК-News", "topic": "Согласования", "mix_type": kwargs["mix_type"],
+                        "product_context": None}
+
+            def __init__(self):
+                self.assertions = []
+
+        class Generator:
+            def run(self, candidate, role):
+                return sample_visual(root)
+
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {"AUQNI_OWNER_USER_ID": "123"}):
+            root = Path(temp)
+            (root / "content").mkdir()
+            (root / "content/smk_satire_bank.json").write_bytes((ROOT / "content/smk_satire_bank.json").read_bytes())
+            api, writer = API(), Writer()
+            pult = Pult(root, json.loads((ROOT / "pult_config.json").read_text()), api,
+                        satire_writer=writer, satire_image_generator=Generator())
+            post_id = pult.satire.plan(datetime(2099, 10, 7, 4, tzinfo=timezone.utc))[0][0]
+            original = pult.satire.get(post_id)["text"]
+            self.assertTrue(pult.process_one_satire_visual())
+            post = pult.satire.get(post_id)
+            self.assertEqual(post["current_version"], 2)
+            self.assertEqual(post["status"], "scheduled")
+            self.assertEqual(pult.satire.version(post_id, 2)["image_sha256"],
+                             pult.satire.version(post_id, 1)["image_sha256"])
+            self.assertTrue(post["text"].startswith(original + "\n\n"))
+            self.assertTrue(writer.assertions[0][1]["preserve_opening"])
+            reviews = [payload for method, payload in api.calls if method == "sendPhoto"]
+            self.assertEqual(len(reviews), 1)
+            buttons = json.loads(reviews[0]["reply_markup"])["inline_keyboard"][0]
+            approval = next(b["callback_data"] for b in buttons if b["text"] == "Принято")
+            self.assertIn(f"satire:approve:{post_id}:2:", approval)
+            self.assertEqual(pult.store.get_kv(f"satire_editorial_review:{post_id}:2"), "sent")
+            with self.assertRaises(PultError):
+                pult.satire.approve(post_id, version=1)
+            self.assertFalse(pult.revise_scheduled_satire(post_id))
+
+    def test_ready_bank_visual_is_expanded_once_and_bad_opening_is_rejected(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
+                                  ROOT / "content/smk_satire_bank.json", {"time": "08:30"}, temp)
+            stream.seed()
+            post_id = stream.plan(datetime(2099, 10, 7, 4, tzinfo=timezone.utc))[0][0]
+            prepare_bank_visual(stream, post_id, temp)
+            self.assertEqual([row["id"] for row in stream.scheduled_editorial_candidates()], [post_id])
+            with self.assertRaises(PultError):
+                stream.revise_scheduled_text(post_id, 1, "Другая шутка.\n\nПрофессиональная мысль.")
+            self.assertEqual(stream.get(post_id)["current_version"], 1)
+            expanded = stream.get(post_id)["text"] + "\n\nЗа шуткой стоит потеря времени на согласовании."
+            self.assertEqual(stream.revise_scheduled_text(post_id, 1, expanded), 2)
+            self.assertEqual(stream.scheduled_editorial_candidates(), [])
+            self.assertEqual(stream.pending_editorial_reviews()[0]["id"], post_id)
+
     def test_visual_is_required_and_old_approval_is_revoked(self):
         with tempfile.TemporaryDirectory() as temp:
             stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),

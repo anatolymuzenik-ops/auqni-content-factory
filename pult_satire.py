@@ -137,7 +137,7 @@ class SatireWriter:
         self.data_dir = Path(data_dir).resolve()
         self.command = command
 
-    def run(self, idea, previous=None, instruction=None, mix_type=None):
+    def run(self, idea, previous=None, instruction=None, mix_type=None, preserve_opening=False):
         if not self.command:
             raise PultError("Команда подготовки SMK_SATIRE не настроена")
         with tempfile.TemporaryDirectory(prefix="smk-satire-", dir=self.data_dir) as temp:
@@ -146,23 +146,37 @@ class SatireWriter:
                 "Ты редактор короткой профессиональной сатиры AUQNI SMK. "
                 "Создай внутри минимум три разных варианта и выбери самый смешной. "
                 "Критерии: узнаваемая боль СМК, логичный абсурд, сильный финал, пересылаемость. "
-                "Не пиши аффирмацию, экспертный пост с одной шуткой, мораль или рекламный слоган. "
+                "Начни готовый пост короткой шуткой с настоящей развязкой: 1–2 фразы. "
+                "После пустой строки добавь ОДНУ короткую профессиональную мысль: "
+                "какая реальная проблема СМК видна за шуткой и почему она мешает работе. "
+                "Мысль должна быть конкретной, живой и полезной; не объясняй шутку и не читай мораль. "
+                "Если это органично, добавь один человеческий вопрос аудитории о её опыте. "
+                "Мягкая связь с AUQNI, CustDev, идеей функции, тестированием или предложением "
+                "поделиться болью допустима только при естественном продолжении темы и не обязательна. "
+                "Не пиши аффирмацию, экспертный пост с одной шуткой, назидание или рекламный слоган. "
                 "Не копируй шутки из банка. Новые материалы могут опираться на процессы, риски, "
                 "аудиты, корректирующие действия, показатели, документы, наблюдения и продуктовые гипотезы. "
-                "Допустимы чистая сатира, сатира с короткой мыслью, с человеческим вопросом или "
-                "мягкой связью с AUQNI. Вопрос о боли аудитории и приглашение к CustDev уместны "
-                "только если продолжают саму шутку; не добавляй их механически. "
                 "Ссылку и упоминание AUQNI не вставляй автоматически. "
-                "pure — без CTA и рекламы; problem — узнаваемая проблема; soft — уместный "
-                "вопрос или мягкая связь с AUQNI. Пиши по-русски, обычно 1–4 короткие фразы. "
+                "Сохраняй редакционные категории: pure — шутка и мысль без вопроса, CTA и продукта; "
+                "problem — шутка и конкретная боль СМК без продуктовой рекламы; "
+                "soft — только если уместен вопрос или мягкая связь с AUQNI. "
+                "Пиши по-русски: обычно 2–4 коротких абзаца, ориентир 150–650 знаков. "
+                "Финальный текст предназначен для подписи к фото Telegram и должен быть короче 900 знаков. "
                 "Не публикуй и не меняй файлы проекта. Верни ТОЛЬКО JSON объект "
                 '{"text":"...","genre":"...","topic":"...","mix_type":"pure|problem|soft",'
                 '"product_context":null} без Markdown.\n'
                 f"Идея пользователя или редакционный вход: {idea}\n"
             )
-            if previous:
+            if mix_type:
+                prompt += f"Сохрани редакционную категорию {mix_type}.\n"
+            if preserve_opening:
+                prompt += ("Это расширение уже запланированной шутки. Первый абзац оставь ТОЧНО "
+                           "в исходном виде, включая все буквы, знаки и кавычки; затем пустая строка "
+                           "и одна короткая профессиональная мысль. Изображение уже согласовано по смыслу "
+                           "исходной шутки, поэтому новую сцену или иную шутку не придумывай.\n")
+            elif previous:
                 prompt += (f"Это правка существующего поста. Текущая версия: {previous}. "
-                           f"Пожелание владельца: {instruction}. Сохрани категорию {mix_type}. "
+                           f"Пожелание владельца: {instruction}. "
                            "Напиши новую редакцию, не повторяй старую буквально.\n")
             args = [piece.format(workspace_root=self.workspace, project_root=self.root,
                                  result_path=result) for piece in self.command]
@@ -180,7 +194,10 @@ class SatireWriter:
                 candidate = json.loads(result.read_text(encoding="utf-8"))
             except (OSError, ValueError):
                 raise PultError("Редактор SMK_SATIRE вернул неверный формат") from None
-            return validate_candidate(candidate, mix_type)
+            candidate = validate_candidate(candidate, mix_type)
+            if preserve_opening and not candidate["text"].startswith(idea.strip() + "\n\n"):
+                raise PultError("Редактор изменил исходную шутку; визуал сохранять нельзя")
+            return candidate
 
 
 def validate_candidate(candidate, required_mix=None):
@@ -488,6 +505,53 @@ class SatireStream:
                              (post_id, version, post_id)).fetchone()
             return dict(row) if row else None
 
+    def revise_scheduled_text(self, post_id, expected_version, new_text):
+        """Keep a scheduled bank joke and its image while adding an editorial thought."""
+        new_text = new_text.strip()
+        if not new_text or len(new_text) > 900:
+            raise PultError("Новая редакция SMK_SATIRE не подходит для подписи Telegram")
+        self.require_visual(post_id, expected_version)
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            post = db.execute("SELECT * FROM satire_posts WHERE id=?", (post_id,)).fetchone()
+            old = db.execute("SELECT * FROM satire_versions WHERE post_id=? AND version=?",
+                             (post_id, expected_version)).fetchone()
+            if (not post or not old or post["status"] != "scheduled" or post["origin"] != "bank"
+                    or post["current_version"] != expected_version or not post["scheduled_at"]):
+                raise PultError("Запланированный пост изменился; редакция не применена")
+            if not new_text.startswith(old["text"].strip() + "\n\n"):
+                raise PultError("Исходная шутка изменилась; существующий визуал нельзя сохранять")
+            version = expected_version + 1
+            db.execute("""INSERT INTO satire_versions
+                (post_id,version,text,genre,topic,mix_type,product_context,source,instruction,created_at,
+                 image_path,image_sha256,visual_role,visual_prompt,visual_source_version,visual_state,visual_last_attempt)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+                (post_id, version, new_text, old["genre"], old["topic"], old["mix_type"],
+                 old["product_context"], "editorial", "Короткая шутка + профессиональная мысль",
+                 iso_utc(utc_now()), old["image_path"], old["image_sha256"], old["visual_role"],
+                 old["visual_prompt"], old["visual_source_version"] or expected_version,
+                 "ready", iso_utc(utc_now())))
+            db.execute("UPDATE satire_posts SET text=?,current_version=? WHERE id=?",
+                       (new_text, version, post_id))
+            return version
+
+    def pending_editorial_reviews(self):
+        with self.store.connect() as db:
+            return [dict(row) for row in db.execute("""SELECT p.id,p.current_version FROM satire_posts p
+                JOIN satire_versions v ON v.post_id=p.id AND v.version=p.current_version
+                WHERE p.status='scheduled' AND v.source='editorial' AND v.image_path IS NOT NULL
+                ORDER BY p.scheduled_at""")]
+
+    def scheduled_editorial_candidates(self):
+        """Find bank jokes with a ready visual that have not yet been expanded."""
+        with self.store.connect() as db:
+            return [dict(row) for row in db.execute("""SELECT p.id,p.current_version,p.text,p.mix_type
+                FROM satire_posts p JOIN satire_versions v
+                ON v.post_id=p.id AND v.version=p.current_version
+                WHERE p.status='scheduled' AND p.origin='bank' AND p.scheduled_at>?
+                AND v.source='bank' AND v.visual_state='ready' AND v.image_path IS NOT NULL
+                ORDER BY p.scheduled_at""", (iso_utc(utc_now()),))]
+
     def plan(self, now=None):
         """Reserve morning slots; never approve a candidate or publish it."""
         now = (now or utc_now()).astimezone(moscow_zone())
@@ -652,5 +716,6 @@ class SatireStream:
 
 
 def review_label(post_id, text, stamp, version=1):
-    when = f" · {local_label(stamp)}" if stamp else " · слот после согласования"
-    return f"SMK_SATIRE {post_id} · версия {version}{when}\n\n{text}"
+    when = datetime.fromisoformat(stamp).astimezone(moscow_zone()).strftime("%d.%m · %H:%M МСК") if stamp else "слот после принятия"
+    revision = f" · редакция {version}" if version > 1 else ""
+    return f"Сатира · {when}{revision}\n\n{text}"
