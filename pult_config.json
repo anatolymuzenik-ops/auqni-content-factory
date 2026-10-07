@@ -20,6 +20,12 @@
     "horizon_days": 10,
     "max_new_per_run": 4
   },
+  "smk_satire": {
+    "enabled": false,
+    "time": "08:30",
+    "weekdays": [0, 1, 2, 3, 4],
+    "horizon_days": 10
+  },
   "max_attachment_bytes": 20971520,
   "transcription_model": "gpt-4o-mini-transcribe",
   "pipeline_command": [

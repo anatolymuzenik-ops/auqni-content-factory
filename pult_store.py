@@ -67,6 +67,21 @@ SCHEMA = (
     )""",
     "CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
     "CREATE INDEX IF NOT EXISTS idx_channel_due ON item_channels(status, scheduled_at)",
+    """CREATE TABLE IF NOT EXISTS satire_posts (
+        id TEXT PRIMARY KEY, text TEXT NOT NULL, genre TEXT NOT NULL, topic TEXT NOT NULL,
+        mix_type TEXT NOT NULL, product_context TEXT, selected INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'unused', scheduled_at TEXT UNIQUE,
+        published_at TEXT, external_id TEXT, public_url TEXT, reactions_json TEXT,
+        CHECK(mix_type IN ('pure','problem','soft'))
+    )""",
+    "CREATE INDEX IF NOT EXISTS idx_satire_due ON satire_posts(status, scheduled_at)",
+    """CREATE TABLE IF NOT EXISTS satire_submissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
+        text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'USER_SUBMISSION',
+        edited_text TEXT, submitted_at TEXT NOT NULL, reviewed_at TEXT,
+        CHECK(kind IN ('text','story','dialogue','joke')),
+        CHECK(status IN ('USER_SUBMISSION','MODERATION','APPROVED','REJECTED','PUBLISHED'))
+    )""",
 )
 
 

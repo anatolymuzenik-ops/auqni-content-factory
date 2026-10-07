@@ -26,6 +26,7 @@ from pult_core import (PultError, Pipeline, iso_utc, moscow_zone,
                        local_label, next_slot, parse_local_time,
                        snapshot_version, utc_now, validate_content)
 from pult_store import Store
+from pult_satire import SatireStream, review_label
 from telegram_channel import TelegramPublisher
 
 
@@ -133,6 +134,11 @@ class Pult:
         self.max_attachment = int(config.get("max_attachment_bytes", 20 * 1024 * 1024))
         self.transcription_model = config.get("transcription_model", "gpt-4o-mini-transcribe")
         self.planner = planner
+        satire_settings = config.get("smk_satire", {})
+        self.satire = (SatireStream(self.store, self.root / "content/smk_satire_bank.json", satire_settings)
+                       if satire_settings.get("enabled") else None)
+        if self.satire:
+            self.satire.seed()
 
     def plan_autonomously(self, now=None):
         """Fill free configured slots with unapproved drafts through the existing queue."""
@@ -381,6 +387,20 @@ class Pult:
             return
         data = query.get("data", "")
         self.api.call("answerCallbackQuery", {"callback_query_id": query["id"]})
+        if data.startswith("satire:"):
+            if not self.satire:
+                raise PultError("Поток SMK_SATIRE выключен")
+            match = re.fullmatch(r"satire:(approve|reject):(SMK-\d{3})", data)
+            if not match:
+                raise PultError("Неизвестная кнопка SMK_SATIRE")
+            action, post_id = match.groups()
+            if action == "approve":
+                self.satire.approve(post_id)
+                self.say(f"{post_id} принят для {local_label(self.satire.get(post_id)['scheduled_at'])}.")
+            else:
+                self.satire.reject(post_id)
+                self.say(f"{post_id} отклонён; публикации не будет.")
+            return
         if data.startswith("confirm:"):
             pending = self.store.get_pending()
             if not pending or pending.get("kind") != "create_confirm":
@@ -473,8 +493,32 @@ class Pult:
                       [[("Открыть публикацию", url)]])
         return True
 
+    def tick_satire(self, now):
+        for post_id, body, stamp in self.satire.plan(now):
+            self.safe_say(review_label(post_id, body, stamp),
+                          [[("Принято", f"satire:approve:{post_id}"),
+                            ("Отклонить", f"satire:reject:{post_id}")]])
+        for row in self.satire.due(now):
+            if not self.satire.claim(row["id"], now):
+                continue
+            try:
+                result = self.api.call("sendMessage", {"chat_id": "@auqni_qms", "text": row["text"]})
+                if (not isinstance(result, dict) or type(result.get("message_id")) is not int
+                        or result.get("chat", {}).get("username") != "auqni_qms"):
+                    raise PultError("Telegram не подтвердил адрес и номер публикации")
+                self.satire.result(row["id"], result["message_id"])
+                self.safe_say(f"{row['id']} опубликован: https://t.me/auqni_qms/{result['message_id']}")
+            except Exception:
+                self.satire.result(row["id"])
+                self.safe_say(f"{row['id']}: результат отправки uncertain. Проверьте канал вручную; повтора нет.")
+
     def tick(self, now=None):
         now = now or utc_now()
+        if self.satire:
+            try:
+                self.tick_satire(now)
+            except Exception as error:
+                print(f"SMK_SATIRE tick failed: {type(error).__name__}", file=sys.stderr)
         lead = timedelta(hours=int(self.config.get("prepare_lead_hours", 72)))
         for idea in self.store.ideas_to_prepare(now + lead):
             inputs = json.loads(idea["brief"])
@@ -556,6 +600,7 @@ class Pult:
         stop = threading.Event()
         interrupted = self.store.recover_jobs()
         uncertain = self.store.recover_publications()
+        satire_uncertain = self.satire.recover() if self.satire else []
 
         def worker():
             while not stop.is_set():
@@ -573,6 +618,8 @@ class Pult:
         for state in uncertain:
             self.safe_say(f"№{state['item_id']} · {state['channel']}: отправка прервалась при перезапуске. "
                           "Статус uncertain; проверьте канал вручную. Автоматического повтора нет.")
+        for post_id in satire_uncertain:
+            self.safe_say(f"{post_id}: отправка прервалась. Статус uncertain; проверьте канал вручную.")
         try:
             while True:
                 self.tick()
@@ -602,6 +649,15 @@ def load_config(path):
             raise PultError("Invalid schedule entry")
     if config.get("timezone") != "Europe/Moscow":
         raise PultError("Only Europe/Moscow is supported")
+    satire = config.get("smk_satire", {})
+    if not isinstance(satire, dict) or not isinstance(satire.get("enabled", False), bool):
+        raise PultError("Invalid SMK_SATIRE configuration")
+    if not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", satire.get("time", "08:30")):
+        raise PultError("Invalid SMK_SATIRE time")
+    if satire.get("weekdays", [0, 1, 2, 3, 4]) != [0, 1, 2, 3, 4]:
+        raise PultError("SMK_SATIRE runs Monday through Friday only")
+    if type(satire.get("horizon_days", 10)) is not int or not 1 <= satire.get("horizon_days", 10) <= 30:
+        raise PultError("Invalid SMK_SATIRE horizon")
     return config
 
 

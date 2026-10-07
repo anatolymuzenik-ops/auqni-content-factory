@@ -10,12 +10,14 @@
 !/pult_config.json
 !/pult_core.py
 !/pult_planner.py
+!/pult_satire.py
 !/pult_store.py
 !/telegram_channel.py
 !/telegram_publish.py
 !/telegram_pult.py
 !/test_pult_planner.py
 !/test_pult_store.py
+!/test_pult_satire.py
 !/test_telegram_publish.py
 !/test_telegram_pult.py
 !/vk_publish.py
@@ -47,6 +49,7 @@
 !/docs/editorial-policy-v1.md
 !/docs/visual-guide-auqni-content-v1.md
 !/docs/source-registry-v1.json
+!/docs/smk-satire.md
 !/docs/telegram-publisher-production-spec.md
 
 !/visual-references/
@@ -57,6 +60,9 @@
 !/examples/
 /examples/**
 !/examples/demo-content.json
+!/content/
+/content/**
+!/content/smk_satire_bank.json
 !/screenshots/
 /screenshots/**
 !/screenshots/README.md
