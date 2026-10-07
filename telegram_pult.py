@@ -572,11 +572,15 @@ class Pult:
         self.api.call("answerCallbackQuery", {"callback_query_id": query["id"]})
         codex_action = re.fullmatch(r"codex:do:([A-Za-z0-9_-]{12,32})", data)
         if codex_action:
-            result = subprocess.run(
-                [sys.executable, "-B", "/home/anatoly/projects/codex-telegram-bridge/bridge.py",
-                 "act", codex_action.group(1)], capture_output=True, text=True, timeout=15,
-                check=False)
-            self.say(result.stdout.strip() or "Не удалось продолжить. Проверьте T3 Code.")
+            try:
+                result = subprocess.run(
+                    [sys.executable, "-B", "/home/anatoly/projects/codex-telegram-bridge/bridge.py",
+                     "act", codex_action.group(1)], capture_output=True, text=True, timeout=15,
+                    check=False)
+                answer = result.stdout.strip() or "Не удалось продолжить. Проверьте T3 Code."
+            except subprocess.TimeoutExpired:
+                answer = "T3 Code не ответил вовремя. Проверьте задачу перед повторным нажатием."
+            self.say(answer)
             return
         schedule = re.fullmatch(r"schedule:(7|14):(all|free)", data)
         if schedule:
