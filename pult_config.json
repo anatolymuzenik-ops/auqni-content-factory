@@ -21,7 +21,7 @@
     "max_new_per_run": 4
   },
   "smk_satire": {
-    "enabled": false,
+    "enabled": true,
     "time": "08:30",
     "weekdays": [0, 1, 2, 3, 4],
     "horizon_days": 10,

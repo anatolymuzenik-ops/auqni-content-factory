@@ -42,11 +42,11 @@ class SatireTests(unittest.TestCase):
             self.assertEqual(stream.get(planned[0][0])["status"], "uncertain")
             self.assertFalse(stream.claim(planned[0][0], datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)))
 
-    def test_existing_schedule_is_unchanged_and_satire_off(self):
+    def test_existing_schedule_is_unchanged_and_satire_on(self):
         config = json.loads((ROOT / "pult_config.json").read_text())
         self.assertEqual(config["channels"]["telegram"]["schedule"],
                          {"0": "19:00", "1": "18:00", "2": "13:00", "3": "18:00"})
-        self.assertFalse(config["smk_satire"]["enabled"])
+        self.assertTrue(config["smk_satire"]["enabled"])
         self.assertEqual(config["smk_satire"]["time"], "08:30")
 
     def test_launch_queue_then_mix_catches_up(self):

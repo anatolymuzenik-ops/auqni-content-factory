@@ -266,7 +266,7 @@ class TodaySlotTests(unittest.TestCase):
         import json
         config = json.loads((Path(__file__).resolve().parent / "pult_config.json").read_text())
         self.assertEqual(config["channels"]["telegram"]["schedule"], SCHEDULE)
-        self.assertFalse(config["smk_satire"]["enabled"])
+        self.assertTrue(config["smk_satire"]["enabled"])
 
 
 if __name__ == "__main__":
