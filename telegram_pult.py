@@ -605,6 +605,19 @@ class Pult:
             raise PultError("Пришлите тему, текст или вложение")
         return {"text": "\n".join(parts), "attachments": attachments}
 
+    def set_edit_input(self, target, prepare=None):
+        """Use the owner's existing single pending edit slot for either post type."""
+        pending = self.store.get_pending()
+        same_target = (pending and pending.get("version") == target["version"]
+                       and pending.get("post_id") == target.get("post_id")
+                       and pending.get("item_id") == target.get("item_id"))
+        if pending and pending.get("kind") in ("edit_input", "satire_edit_input") and not same_target:
+            active = pending.get("post_id") or f"№{pending['item_id']}"
+            raise PultError(f"Сначала пришлите правку для {active} или отмените ввод через /start.")
+        if prepare:
+            prepare()
+        self.store.set_pending(target)
+
     def handle_message(self, message):
         user = message.get("from", {})
         chat = message.get("chat", {})
@@ -613,7 +626,8 @@ class Pult:
         text = (message.get("text") or "").strip()
         if text in ("/start", "Создать пост") and self.satire:
             pending_edit = self.store.get_pending()
-            if pending_edit and pending_edit.get("kind") == "satire_edit_input":
+            if (pending_edit and pending_edit.get("kind") in ("edit_input", "satire_edit_input")
+                    and pending_edit.get("post_id")):
                 try:
                     self.satire.cancel_edit(pending_edit["post_id"], pending_edit["version"])
                 except PultError:
@@ -675,7 +689,7 @@ class Pult:
         kind = pending["kind"]
         if kind in ("create_input", "idea_input", "edit_input", "satire_edit_input"):
             inputs = self._input_from_message(message)
-            if kind == "satire_edit_input":
+            if kind == "satire_edit_input" or (kind == "edit_input" and "post_id" in pending):
                 submission_id = self.satire.queue_edit(pending["post_id"], pending["version"], inputs["text"])
                 self.store.clear_pending()
                 self.say(f"SMK_SATIRE: правка #{submission_id} готовится. Согласование предыдущей версии снято.")
@@ -754,14 +768,14 @@ class Pult:
             elif action == "edit":
                 if row["status"] not in ("scheduled", "approved", "draft"):
                     raise PultError("Пост уже недоступен для правки")
-                self.satire.begin_edit(post_id, version)
-                self.store.set_pending({"kind": "satire_edit_input", "post_id": post_id, "version": version})
-                self.say(f"Что изменить в {post_id} · версия {version}? Пришлите текст или голосовое сообщение. "
-                         "Прежнее согласование снято.", [[("Отмена", f"satire:cancel:{post_id}:{version}")]])
+                self.set_edit_input({"kind": "edit_input", "post_id": post_id, "version": version},
+                                    lambda: self.satire.begin_edit(post_id, version))
+                self.say(f"Что изменить в {post_id} · версия {version}? Ответьте текстом или голосовым сообщением.")
             elif action == "cancel":
                 self.satire.cancel_edit(post_id, version)
                 pending = self.store.get_pending()
-                if pending and pending.get("kind") == "satire_edit_input" and pending["post_id"] == post_id:
+                if (pending and pending.get("kind") in ("edit_input", "satire_edit_input")
+                        and pending.get("post_id") == post_id and pending.get("version") == version):
                     self.store.clear_pending()
                 self.say(f"Правка {post_id} отменена. Прежнее согласование не восстановлено; откройте пост заново.")
             else:
@@ -827,7 +841,7 @@ class Pult:
         elif action == "publish":
             self.publish_item(item_id, version, scheduled=False)
         elif action == "edit":
-            self.store.set_pending({"kind": "edit_input", "item_id": item_id, "version": version})
+            self.set_edit_input({"kind": "edit_input", "item_id": item_id, "version": version})
             self.say("Что изменить? Ответьте текстом или голосовым сообщением.")
         elif action == "plan":
             self.store.to_plan(item_id, self.channel)
@@ -1000,8 +1014,13 @@ class Pult:
         satire_uncertain = self.satire.recover() if self.satire else []
         if self.satire:
             self.satire.recover_submissions()
+            pending_edit = self.store.get_pending()
+            active_post_id = (pending_edit.get("post_id") if pending_edit and pending_edit.get("kind") in
+                              ("edit_input", "satire_edit_input") else None)
+            abandoned_edits = self.satire.recover_abandoned_edits(active_post_id)
             visual_revoked = self.satire.recover_visuals()
         else:
+            abandoned_edits = []
             visual_revoked = []
 
         def worker():
@@ -1026,6 +1045,9 @@ class Pult:
         if visual_revoked:
             self.safe_say("Для ранее согласованных SMK_SATIRE готовятся новые изображения. "
                           "Прежнее согласование снято; каждый пакет потребуется принять заново.")
+        if abandoned_edits:
+            self.safe_say("Незавершённый ввод правки SMK_SATIRE сброшен для " + ", ".join(abandoned_edits)
+                          + ". Откройте актуальные карточки и нажмите «Изменить» повторно.")
         if self.satire:
             for row in self.satire.pending_editorial_reviews():
                 key = f"satire_editorial_review:{row['id']}:{row['current_version']}"

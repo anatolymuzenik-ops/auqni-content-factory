@@ -37,6 +37,105 @@ def prepare_bank_visual(stream, post_id, root):
 
 
 class SatireTests(unittest.TestCase):
+    def test_two_owner_edits_use_the_same_pending_input_without_crossing_posts(self):
+        class API:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, method, payload, files=None):
+                self.calls.append((method, payload))
+                return {"message_id": len(self.calls)}
+
+            def download(self, file_id, target, limit):
+                Path(target).parent.mkdir(parents=True, exist_ok=True)
+                Path(target).write_bytes(b"voice")
+
+            def transcribe(self, path, model):
+                return "Голосовая правка для второго поста"
+
+        class Writer:
+            def __init__(self):
+                self.instructions = []
+
+            def run(self, idea, previous=None, instruction=None, mix_type=None):
+                self.instructions.append((idea, previous, instruction))
+                return {"text": f"После правки {idea} рабочая ситуация стала яснее. Теперь команда видит проблему и её последствия.",
+                        "genre": "новая сатира", "topic": f"новая тема {idea}",
+                        "mix_type": mix_type, "product_context": None}
+
+        class Generator:
+            def __init__(self):
+                self.calls = 0
+
+            def run(self, candidate, role):
+                self.calls += 1
+                return sample_visual(root, f"edited-{self.calls}.png")
+
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {"AUQNI_OWNER_USER_ID": "123"}):
+            root = Path(temp)
+            (root / "content").mkdir()
+            (root / "content/smk_satire_bank.json").write_bytes((ROOT / "content/smk_satire_bank.json").read_bytes())
+            api, writer, generator = API(), Writer(), Generator()
+            pult = Pult(root, json.loads((ROOT / "pult_config.json").read_text()), api,
+                        satire_writer=writer, satire_image_generator=generator)
+            before = datetime(2099, 10, 7, 4, tzinfo=timezone.utc)
+            first, second = [post_id for post_id, _, _ in pult.satire.plan(before)[:2]]
+            for post_id in (first, second):
+                prepare_bank_visual(pult.satire, post_id, root)
+                pult.satire.approve(post_id, before, version=1)
+            originals = {post_id: pult.satire.version(post_id, 1) for post_id in (first, second)}
+
+            def click(post_id, version):
+                pult.handle_callback({"id": f"edit-{post_id}", "from": {"id": 123},
+                                      "message": {"chat": {"id": 123}},
+                                      "data": f"satire:edit:{post_id}:{version}"})
+
+            def send(**content):
+                pult.handle_message({"from": {"id": 123}, "chat": {"id": 123, "type": "private"},
+                                     **content})
+
+            click(first, 1)
+            self.assertEqual(pult.store.get_pending(), {"kind": "edit_input", "post_id": first, "version": 1})
+            self.assertEqual(pult.satire.get(first)["status"], "editing")
+            self.assertNotIn(first, [row["id"] for row in
+                                     pult.satire.due(datetime(2099, 10, 10, tzinfo=timezone.utc))])
+            with self.assertRaises(PultError):
+                click(second, 1)
+            self.assertEqual(pult.store.get_pending()["post_id"], first)
+            self.assertEqual(pult.satire.get(second)["status"], "approved")
+            send(text="Текстовая правка для первого поста")
+            self.assertEqual(pult.satire.get(first)["status"], "editing")
+            self.assertEqual(pult.satire.get(second)["status"], "approved")
+            self.assertTrue(pult.process_one_satire_submission())
+            self.assertEqual(pult.satire.get(first)["current_version"], 2)
+            self.assertEqual(pult.satire.get(second)["current_version"], 1)
+
+            click(second, 1)
+            send(voice={"file_id": "second-voice", "file_size": 100})
+            self.assertEqual(pult.satire.get(second)["status"], "editing")
+            self.assertTrue(pult.process_one_satire_submission())
+            self.assertEqual([instruction for _, _, instruction in writer.instructions],
+                             ["Текстовая правка для первого поста", "Голосовая правка для второго поста"])
+            self.assertEqual(generator.calls, 2)
+            self.assertIsNone(pult.store.get_pending())
+            for post_id in (first, second):
+                post = pult.satire.get(post_id)
+                version = pult.satire.version(post_id, 2)
+                self.assertEqual(post["current_version"], 2)
+                self.assertEqual(post["status"], "scheduled")
+                self.assertNotEqual(version["image_path"], originals[post_id]["image_path"])
+                self.assertEqual(pult.satire.version(post_id, 1)["image_path"], originals[post_id]["image_path"])
+                with self.assertRaises(PultError):
+                    pult.satire.approve(post_id, before, version=1)
+                pult.satire.approve(post_id, before, version=2)
+            reviews = [payload for method, payload in api.calls if method == "sendPhoto"]
+            self.assertEqual(len(reviews), 2)
+            for post_id, payload in zip((first, second), reviews):
+                buttons = json.loads(payload["reply_markup"])["inline_keyboard"][0]
+                self.assertEqual([button["text"] for button in buttons],
+                                 ["Принято", "Изменить", "Отклонить"])
+                self.assertTrue(buttons[0]["callback_data"].startswith(f"satire:approve:{post_id}:2:"))
+
     def test_scheduled_bank_joke_is_expanded_before_visual_review(self):
         class API:
             def __init__(self):
@@ -102,6 +201,20 @@ class SatireTests(unittest.TestCase):
             self.assertEqual(stream.revise_scheduled_text(post_id, 1, expanded), 2)
             self.assertEqual(stream.scheduled_editorial_candidates(), [])
             self.assertEqual(stream.pending_editorial_reviews()[0]["id"], post_id)
+
+    def test_abandoned_edit_recovery_keeps_the_active_pending_post(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
+                                  ROOT / "content/smk_satire_bank.json", {"time": "08:30"}, temp)
+            stream.seed()
+            first, second = [post_id for post_id, _, _ in
+                             stream.plan(datetime(2099, 10, 7, 4, tzinfo=timezone.utc))[:2]]
+            stream.begin_edit(first, 1)
+            stream.begin_edit(second, 1)
+            self.assertEqual(stream.recover_abandoned_edits(first), [second])
+            self.assertEqual(stream.get(first)["status"], "editing")
+            self.assertEqual(stream.get(second)["status"], "scheduled")
+            self.assertEqual(stream.recover_abandoned_edits(), [first])
 
     def test_visual_is_required_and_old_approval_is_revoked(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -268,11 +381,9 @@ class SatireTests(unittest.TestCase):
             self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
             pult.handle_callback({"id": "cb3", "from": {"id": 123}, "message": {"chat": {"id": 123}},
                                   "data": f"satire:edit:{post['id']}:1"})
+            self.assertEqual(pult.store.get_pending(),
+                             {"kind": "edit_input", "post_id": post["id"], "version": 1})
             self.assertEqual(pult.satire.get(post["id"])["status"], "editing")
-            self.assertFalse(pult.satire.due(datetime(2026, 12, 1, tzinfo=timezone.utc)))
-            pult.handle_callback({"id": "cb4", "from": {"id": 123}, "message": {"chat": {"id": 123}},
-                                  "data": f"satire:cancel:{post['id']}:1"})
-            self.assertEqual(pult.satire.get(post["id"])["status"], "scheduled")
 
     def test_substantive_edit_creates_new_text_and_image_version(self):
         class API:

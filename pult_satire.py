@@ -394,12 +394,14 @@ class SatireStream:
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT status,current_version FROM satire_posts WHERE id=?", (post_id,)).fetchone()
-            if not row or row["current_version"] != version or row["status"] != "editing":
+            if not row or row["current_version"] != version or row["status"] not in (
+                    "scheduled", "approved", "draft", "editing"):
                 raise PultError("Пост уже изменился или недоступен для правки")
             if db.execute("""SELECT 1 FROM satire_submissions WHERE target_post_id=?
                 AND base_version=? AND status IN ('USER_SUBMISSION','MODERATION') AND last_error IS NULL""",
                 (post_id, version)).fetchone():
                 raise PultError("Правка уже готовится")
+            db.execute("UPDATE satire_posts SET status='editing' WHERE id=?", (post_id,))
             return db.execute("""INSERT INTO satire_submissions
                 (kind,text,status,submitted_at,target_post_id,base_version)
                 VALUES('text',?,'USER_SUBMISSION',?,?,?)""",
@@ -418,6 +420,25 @@ class SatireStream:
         with self.store.connect() as db:
             db.execute("""UPDATE satire_submissions SET status='USER_SUBMISSION'
                 WHERE status='MODERATION' AND result_post_id IS NULL AND last_error IS NULL""")
+
+    def recover_abandoned_edits(self, active_post_id=None):
+        """Release old edit clicks that lost their single pending input."""
+        restored = []
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            rows = db.execute("""SELECT id,scheduled_at FROM satire_posts p WHERE status='editing'
+                AND NOT EXISTS (SELECT 1 FROM satire_submissions s WHERE s.target_post_id=p.id
+                    AND s.base_version=p.current_version AND s.status IN ('USER_SUBMISSION','MODERATION')
+                    AND s.last_error IS NULL)""").fetchall()
+            for row in rows:
+                if row["id"] == active_post_id:
+                    continue
+                future = row["scheduled_at"] and row["scheduled_at"] > iso_utc(utc_now())
+                db.execute("UPDATE satire_posts SET status=?,scheduled_at=? WHERE id=?",
+                           ("scheduled" if future else "draft", row["scheduled_at"] if future else None,
+                            row["id"]))
+                restored.append(row["id"])
+        return restored
 
     def finish_submission(self, submission, candidate, visual):
         candidate = validate_candidate(candidate)
