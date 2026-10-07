@@ -108,7 +108,8 @@ class Store:
                                  "origin": "TEXT NOT NULL DEFAULT 'bank'",
                                  "source_submission_id": "INTEGER"},
                 "satire_submissions": {"target_post_id": "TEXT", "base_version": "INTEGER",
-                                       "result_post_id": "TEXT", "last_error": "TEXT"},
+                                       "result_post_id": "TEXT", "last_error": "TEXT",
+                                       "requested_slot": "TEXT"},
                 "satire_versions": {"image_path": "TEXT", "image_sha256": "TEXT",
                                     "visual_role": "TEXT", "visual_prompt": "TEXT",
                                     "visual_source_version": "INTEGER",
@@ -206,15 +207,41 @@ class Store:
         return {row["channel"]: dict(row) for row in db.execute(
             "SELECT * FROM item_channels WHERE item_id=?", (item_id,))}
 
+    @staticmethod
+    def _insert_item(db, kind, title, brief, channels):
+        cur = db.execute("INSERT INTO items(kind,title,brief,status,created_at) VALUES(?,?,?,?,?)",
+                         (kind, title, brief, "idea" if kind == "idea" else "preparing", iso_utc(utc_now())))
+        item_id = cur.lastrowid
+        for channel in dict.fromkeys(channels):
+            db.execute("INSERT INTO item_channels(item_id,channel,status) VALUES(?,?,?)",
+                       (item_id, channel, "idea" if kind == "idea" else "preparing"))
+        return item_id
+
+    @staticmethod
+    def _slot_free(db, when):
+        return (not db.execute("""SELECT 1 FROM item_channels WHERE channel='telegram' AND selected=1
+            AND scheduled_at=? AND status!='rejected'""", (when,)).fetchone()
+            and not db.execute("""SELECT 1 FROM satire_posts WHERE scheduled_at=?
+            AND status!='rejected'""", (when,)).fetchone())
+
+    def slot_is_free(self, when):
+        with self.connect() as db:
+            return self._slot_free(db, when)
+
     def create(self, kind, title, brief, channels=()):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            cur = db.execute("INSERT INTO items(kind,title,brief,status,created_at) VALUES(?,?,?,?,?)",
-                             (kind, title, brief, "idea" if kind == "idea" else "preparing", iso_utc(utc_now())))
-            item_id = cur.lastrowid
-            for channel in dict.fromkeys(channels):
-                db.execute("INSERT INTO item_channels(item_id,channel,status) VALUES(?,?,?)",
-                           (item_id, channel, "idea" if kind == "idea" else "preparing"))
+            return self._insert_item(db, kind, title, brief, channels)
+
+    def create_scheduled(self, title, brief, when, channel="telegram"):
+        """Reuse item creation and reserve a selected slot in one transaction."""
+        with self.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            if when <= iso_utc(utc_now()) or not self._slot_free(db, when):
+                raise PultError("Выбранный слот уже занят или его время прошло")
+            item_id = self._insert_item(db, "post", title, brief, (channel,))
+            db.execute("UPDATE item_channels SET scheduled_at=? WHERE item_id=? AND channel=?",
+                       (when, item_id, channel))
             return item_id
 
     def get(self, item_id):
@@ -272,7 +299,7 @@ class Store:
             return [row[0] for row in db.execute("""
                 SELECT scheduled_at FROM item_channels
                 WHERE channel=? AND selected=1 AND scheduled_at IS NOT NULL
-                  AND status NOT IN ('rejected','published') AND item_id != ?
+                  AND status!='rejected' AND item_id != ?
             """, (channel, exclude_id or -1))]
 
     def set_schedule(self, item_id, channel, when):
@@ -283,9 +310,12 @@ class Store:
             if not item or not state or item["status"] == "rejected" or state["status"] in ("published", "publishing", "uncertain", "rejected"):
                 raise PultError("Канал материала недоступен для переноса")
             if when and db.execute("""SELECT 1 FROM item_channels WHERE channel=? AND item_id != ?
-                AND selected=1 AND scheduled_at=? AND status NOT IN ('rejected','published')""",
+                AND selected=1 AND scheduled_at=? AND status!='rejected'""",
                 (channel, item_id, when)).fetchone():
                 raise PultError("Это время уже занято другим материалом в этом канале")
+            if when and channel == "telegram" and db.execute("""SELECT 1 FROM satire_posts
+                WHERE scheduled_at=? AND status!='rejected'""", (when,)).fetchone():
+                raise PultError("Это время уже занято SMK_SATIRE")
             if item["status"] == "preparing":
                 status = "preparing"
             elif item["current_version"]:
@@ -346,6 +376,9 @@ class Store:
                 raise PultError("Сначала назначьте время публикации")
             if state["scheduled_at"] <= iso_utc(utc_now()):
                 raise PultError("Плановое время прошло; сначала перенесите публикацию")
+            if channel == "telegram" and db.execute("""SELECT 1 FROM satire_posts
+                WHERE scheduled_at=? AND status!='rejected'""", (state["scheduled_at"],)).fetchone():
+                raise PultError("Слот уже занят SMK_SATIRE")
             if not db.execute("SELECT 1 FROM version_channels WHERE item_id=? AND version=? AND channel=?", (item_id, version, channel)).fetchone():
                 raise PultError("У версии нет материала для этого канала")
             db.execute("UPDATE item_channels SET approved_version=?, status='approved' WHERE item_id=? AND channel=?", (version, item_id, channel))

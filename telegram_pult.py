@@ -8,7 +8,7 @@ the existing telegram_publish.py.
 from __future__ import annotations
 
 import argparse
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import mimetypes
@@ -383,28 +383,45 @@ class Pult:
         except PultError:
             pass
 
-    def show_satire_review(self, post_id):
+    def show_satire_review(self, post_id, back=None):
         row = self.satire.get(post_id) if self.satire else None
-        if not row or row["status"] not in ("scheduled", "draft", "approved"):
-            raise PultError("SMK_SATIRE не ждёт согласования")
+        if not row or row["status"] in ("unused", "rejected"):
+            raise PultError("Пост SMK_SATIRE недоступен")
         version = row["current_version"]
-        image_path = self.satire.require_visual(post_id, version)
+        try:
+            image_path = self.satire.require_visual(post_id, version)
+        except PultError:
+            if not back:
+                raise
+            buttons = ([[("Изменить", f"satire:edit:{post_id}:{version}"),
+                         ("Отклонить", f"satire:reject:{post_id}:{version}")]]
+                       if row["status"] in ("scheduled", "draft", "approved") else [])
+            buttons.append([("Назад в расписание", back)])
+            self.say(review_label(post_id, row["text"], row["scheduled_at"], version)
+                     + "\n\nИзображение ещё не готово; принятие недоступно.", buttons)
+            return
         visual_token = self.satire.version(post_id, version)["image_sha256"][:12]
-        buttons = [] if row["status"] == "approved" else [("Принято", f"satire:approve:{post_id}:{version}:{visual_token}")]
-        buttons.extend([("Изменить", f"satire:edit:{post_id}:{version}"),
-                        ("Отклонить", f"satire:reject:{post_id}:{version}")])
-        status = "Согласовано" if row["status"] == "approved" else "Ожидает согласования"
+        buttons = []
+        if row["status"] in ("scheduled", "draft", "approved"):
+            if row["status"] != "approved":
+                buttons.append(("Принято", f"satire:approve:{post_id}:{version}:{visual_token}"))
+            buttons.extend([("Изменить", f"satire:edit:{post_id}:{version}"),
+                            ("Отклонить", f"satire:reject:{post_id}:{version}")])
+        button_rows = ([buttons] if buttons else []) + ([[("Назад в расписание", back)]] if back else [])
+        status = {"approved": "Согласовано", "editing": "Готовится новая версия",
+                  "published": "Опубликовано", "publishing": "Отправляется",
+                  "uncertain": "Отправка требует проверки"}.get(row["status"], "Ожидает согласования")
         image = Path(image_path).read_bytes()
         caption = review_label(post_id, row["text"], row["scheduled_at"], version) + f"\n\n{status}"
         if len(caption) <= 1024:
             self.api.call("sendPhoto", {"chat_id": self.owner_id, "caption": caption,
-                                      "reply_markup": json.dumps(self.inline([buttons]), ensure_ascii=False)},
+                                      "reply_markup": json.dumps(self.inline(button_rows), ensure_ascii=False)},
                           {"photo": ("satire.png", image, "image/png")})
         else:
             self.api.call("sendPhoto", {"chat_id": self.owner_id,
                                       "caption": "Сатира" + (f" · редакция {version}" if version > 1 else "")},
                           {"photo": ("satire.png", image, "image/png")})
-            self.say(caption, [buttons])
+            self.say(caption, button_rows or None)
         if self.satire.version(post_id, version)["source"] == "editorial":
             self.store.set_kv(f"satire_editorial_review:{post_id}:{version}", "sent")
 
@@ -482,9 +499,13 @@ class Pult:
             post_id = self.satire.finish_submission(submission, candidate, visual)
         except Exception as error:
             self.satire.fail_submission(submission, error)
+            detail = f" {error}" if isinstance(error, PultError) else ""
+            buttons = ([[("Свободные слоты", "schedule:7:free")]]
+                       if submission.get("requested_slot") and isinstance(error, PultError)
+                       and "слот" in str(error).lower() else
+                       [[("Повторить", f"satire:retry:{submission['id']}")]])
             self.safe_say(f"Идею SMK_SATIRE #{submission['id']} пока не удалось подготовить. "
-                          "Исходный текст сохранён.",
-                          [[("Повторить", f"satire:retry:{submission['id']}")]])
+                          f"Исходный текст сохранён.{detail}", buttons)
         else:
             try:
                 self.show_satire_review(post_id)
@@ -492,7 +513,7 @@ class Pult:
                 print(f"SMK_SATIRE review delivery failed for {post_id}", file=sys.stderr)
         return True
 
-    def show_review(self, item_id):
+    def show_review(self, item_id, back=None):
         item = self.store.get(item_id)
         if not item or not item["current_version"]:
             raise PultError("Пост ещё не подготовлен")
@@ -524,32 +545,39 @@ class Pult:
             self.say(caption + f"\n\n{candidate} опубликован · ID: {item_id}\n"
                      f"Дата: {local_label(state['published_at'])}\n"
                      f"Статус: опубликовано\nСсылка: {state['public_url']}",
-                     [[("Открыть публикацию", state["public_url"])]])
+                     [[("Открыть публикацию", state["public_url"])]] +
+                     ([[("Назад в расписание", back)]] if back else []))
             return
         if state["status"] == "uncertain":
-            self.say(caption + "\n\nРезультат публикации uncertain. Проверьте канал вручную; повтора нет.")
+            self.say(caption + "\n\nРезультат публикации uncertain. Проверьте канал вручную; повтора нет.",
+                     [[("Назад в расписание", back)]] if back else None)
             return
         if state["status"] == "rejected":
-            self.say(caption + "\n\nМатериал отклонён.")
+            self.say(caption + "\n\nМатериал отклонён.", [[("Назад в расписание", back)]] if back else None)
             return
         if item["status"] == "preparing":
-            self.say(caption + "\n\nГотовится новая версия; текущая версия закрыта для публикации.")
+            self.say(caption + "\n\nГотовится новая версия; текущая версия закрыта для публикации.",
+                     [[("Назад в расписание", back)]] if back else None)
             return
         status = "\nПринято для плановой публикации." if state["approved_version"] == v else ""
-        self.say(caption + status, [
+        buttons = [
             [("Принято", f"approve:{item_id}:{v}"), ("Опубликовать сейчас", f"publish:{item_id}:{v}")],
             [("Изменить", f"edit:{item_id}:{v}"), ("В контент-план", f"plan:{item_id}:{v}"), ("Отклонить", f"reject:{item_id}:{v}")],
-        ])
+        ]
+        if back:
+            buttons.append([("Назад в расписание", back)])
+        self.say(caption + status, buttons)
 
-    def show_item(self, item_id):
+    def show_item(self, item_id, back=None):
         item = self.store.get(item_id)
         if not item:
             raise PultError("Материал не найден")
         if item["current_version"]:
-            self.show_review(item_id)
+            self.show_review(item_id, back)
         else:
             self.say(f"Идея №{item_id}\n{item['title']}\n{item['brief'][:1000]}",
-                     [[("Создать пост", f"make:{item_id}")]])
+                     [[("Создать пост", f"make:{item_id}")]] +
+                     ([[("Назад в расписание", back)]] if back else []))
 
     def show_plan(self):
         rows = self.store.list_plan()
@@ -574,12 +602,30 @@ class Pult:
 
     def show_schedule(self, days=7, free_only=False, now=None):
         pages = schedule_messages(self.store, self.schedule, self.config.get("smk_satire", {}),
-                                  days=days, free_only=free_only, now=now)
+                                  days=days, free_only=free_only, now=now, with_actions=True)
         buttons = [[("7 дней", "schedule:7:all"), ("14 дней", "schedule:14:all")],
                    [("Все слоты" if free_only else "Только свободные",
                      f"schedule:{days}:{'all' if free_only else 'free'}")]]
-        for number, page in enumerate(pages):
-            self.say(page, buttons if number == len(pages) - 1 else None)
+        for number, (page, actions) in enumerate(pages):
+            rows = [[action] for action in actions]
+            if number == len(pages) - 1:
+                rows.extend(buttons)
+            self.say(page, rows)
+
+    def schedule_slot(self, kind, epoch):
+        try:
+            stamp = iso_utc(datetime.fromtimestamp(int(epoch), tz=timezone.utc))
+        except (OverflowError, OSError, ValueError):
+            raise PultError("Неверное время слота") from None
+        local = datetime.fromisoformat(stamp).astimezone(moscow_zone())
+        clock = local.strftime("%H:%M")
+        satire = self.config.get("smk_satire", {})
+        configured = (self.schedule.get(str(local.weekday())) == clock if kind == "main" else
+                      satire.get("enabled") and local.weekday() in satire.get("weekdays", [0, 1, 2, 3, 4])
+                      and satire.get("time", "08:30") == clock)
+        if not configured or stamp <= iso_utc(utc_now()) or not self.store.slot_is_free(stamp):
+            raise PultError("Выбранный слот уже занят или его время прошло. Обновите расписание.")
+        return stamp
 
     def _input_from_message(self, message):
         parts = []
@@ -707,10 +753,12 @@ class Pult:
                 self.store.clear_pending()
                 self.say(f"Идея сохранена как №{item_id}.", [[("Создать пост", f"make:{item_id}")]])
             else:
-                self.store.set_pending({"kind": "create_confirm", "inputs": inputs})
+                slot_context = {key: pending[key] for key in ("slot", "slot_kind") if key in pending}
+                self.store.set_pending({"kind": "create_confirm", "inputs": inputs, **slot_context})
                 summary = (inputs["text"] or "Вложение")[:400]
-                buttons = [("Создать", "confirm:create"), ("В контент-план", "confirm:plan")]
-                if self.satire and inputs["text"].strip():
+                buttons = [] if pending.get("slot_kind") == "smk" else [
+                    ("Создать", "confirm:create"), ("В контент-план", "confirm:plan")]
+                if self.satire and inputs["text"].strip() and pending.get("slot_kind") != "main":
                     buttons.append(("SMK_SATIRE", "confirm:satire"))
                 buttons.append(("Отмена", "confirm:cancel"))
                 self.say("Вход для поста:\n" + summary + "\n\nЧто сделать?", [buttons])
@@ -737,6 +785,29 @@ class Pult:
         schedule = re.fullmatch(r"schedule:(7|14):(all|free)", data)
         if schedule:
             self.show_schedule(int(schedule.group(1)), schedule.group(2) == "free")
+            return
+        schedule_open = re.fullmatch(r"schedule:open:(main|smk):(\d+|SMK-\d{3,}):(7|14):(all|free)", data)
+        if schedule_open:
+            kind, post_id, days, mode = schedule_open.groups()
+            back = f"schedule:{days}:{mode}"
+            if kind == "smk" and post_id.startswith("SMK-"):
+                self.show_satire_review(post_id, back=back)
+            elif kind == "main" and post_id.isdigit():
+                self.show_item(int(post_id), back=back)
+            else:
+                raise PultError("Неверный пост расписания")
+            return
+        schedule_add = re.fullmatch(r"schedule:add:(main|smk):(\d+):(7|14):(all|free)", data)
+        if schedule_add:
+            kind, epoch, days, mode = schedule_add.groups()
+            pending = self.store.get_pending()
+            if pending and pending.get("kind") in ("edit_input", "satire_edit_input"):
+                raise PultError("Сначала завершите текущую правку или сбросьте ввод через /start.")
+            slot = self.schedule_slot(kind, epoch)
+            self.store.set_pending({"kind": "create_input", "slot": slot, "slot_kind": kind})
+            self.say(f"Слот {local_label(slot)} · {'SMK_SATIRE' if kind == 'smk' else 'основной контент'}. "
+                     "Пришлите тему, текст или голосовое сообщение.",
+                     [[("Назад в расписание", f"schedule:{days}:{mode}")]])
             return
         if data.startswith("satire:"):
             if not self.satire:
@@ -789,23 +860,39 @@ class Pult:
             if data == "confirm:satire":
                 if not self.satire:
                     raise PultError("Поток SMK_SATIRE выключен")
-                submission_id = self.satire.add_idea(pending["inputs"]["text"])
+                if pending.get("slot_kind") == "main":
+                    raise PultError("Этот слот предназначен для основного контента")
+                slot = pending.get("slot")
+                if slot:
+                    self.schedule_slot("smk", datetime.fromisoformat(slot).timestamp())
+                submission_id = self.satire.add_idea(pending["inputs"]["text"], requested_slot=slot)
                 self.store.clear_pending()
                 self.say(f"Идея SMK_SATIRE #{submission_id} принята. Подготовлю короткий пост и пришлю на согласование.")
                 return
-            self.store.clear_pending()
             if data == "confirm:cancel":
+                self.store.clear_pending()
                 self.say("Отменено.")
             elif data == "confirm:plan":
                 inputs = pending["inputs"]
                 item_id = self.store.create("idea", (inputs["text"] or "Идея из вложения")[:100], json.dumps(inputs, ensure_ascii=False), channels=[self.channel])
+                self.store.clear_pending()
                 self.say(f"Сохранено в банк идей как №{item_id}.")
             elif data == "confirm:create":
+                if pending.get("slot_kind") == "smk":
+                    raise PultError("Этот слот предназначен для SMK_SATIRE")
                 inputs = pending["inputs"]
-                when = next_slot(self.schedule, self.store.occupied_slots(self.channel))
-                item_id = self.store.create("post", (inputs["text"] or "Материал из вложения")[:100], json.dumps(inputs, ensure_ascii=False), channels=[self.channel])
-                self.store.set_schedule(item_id, self.channel, when)
+                slot = pending.get("slot")
+                when = (self.schedule_slot("main", datetime.fromisoformat(slot).timestamp()) if slot
+                        else next_slot(self.schedule, self.store.occupied_slots(self.channel)))
+                title = (inputs["text"] or "Материал из вложения")[:100]
+                brief = json.dumps(inputs, ensure_ascii=False)
+                if slot:
+                    item_id = self.store.create_scheduled(title, brief, when, self.channel)
+                else:
+                    item_id = self.store.create("post", title, brief, channels=[self.channel])
+                    self.store.set_schedule(item_id, self.channel, when)
                 self.store.enqueue(item_id, inputs["text"] or "Подготовь материал из приложенного файла", inputs)
+                self.store.clear_pending()
                 self.say(f"Публикация №{item_id} готовится. План: {local_label(when)}.")
             return
         if data == "idea:new":

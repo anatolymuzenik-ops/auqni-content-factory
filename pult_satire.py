@@ -357,13 +357,18 @@ class SatireStream:
                 SELECT id,1,text,genre,topic,mix_type,product_context,'bank',NULL,?
                 FROM satire_posts WHERE origin='bank'""", (iso_utc(utc_now()),))
 
-    def add_idea(self, text):
+    def add_idea(self, text, requested_slot=None):
         text = text.strip()
         if not text or len(text) > 2000:
             raise PultError("Идея SMK_SATIRE должна быть короче 2000 символов")
         with self.store.connect() as db:
-            return db.execute("""INSERT INTO satire_submissions(kind,text,status,submitted_at)
-                VALUES('text',?,'USER_SUBMISSION',?)""", (text, iso_utc(utc_now()))).lastrowid
+            db.execute("BEGIN IMMEDIATE")
+            if requested_slot and (requested_slot <= iso_utc(utc_now())
+                                   or not self.store._slot_free(db, requested_slot)):
+                raise PultError("Выбранный слот SMK_SATIRE уже занят или его время прошло")
+            return db.execute("""INSERT INTO satire_submissions(kind,text,status,submitted_at,requested_slot)
+                VALUES('text',?,'USER_SUBMISSION',?,?)""",
+                (text, iso_utc(utc_now()), requested_slot)).lastrowid
 
     def begin_edit(self, post_id, version):
         with self.store.connect() as db:
@@ -447,7 +452,7 @@ class SatireStream:
             raise PultError("Хеш изображения SMK_SATIRE не совпал")
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            job = db.execute("SELECT status,target_post_id,base_version FROM satire_submissions WHERE id=?",
+            job = db.execute("SELECT status,target_post_id,base_version,requested_slot FROM satire_submissions WHERE id=?",
                              (submission["id"],)).fetchone()
             if not job or job["status"] != "MODERATION":
                 raise PultError("Идея SMK_SATIRE уже обработана")
@@ -466,6 +471,10 @@ class SatireStream:
                      old["scheduled_at"] if future else None, target))
                 post_id = target
             else:
+                requested_slot = job["requested_slot"]
+                if requested_slot and (requested_slot <= iso_utc(utc_now())
+                                       or not self.store._slot_free(db, requested_slot)):
+                    raise PultError("Выбранный слот SMK_SATIRE занят; создайте пост для другого свободного слота")
                 duplicate = db.execute("SELECT id FROM satire_posts WHERE lower(trim(text))=lower(trim(?))",
                                        (candidate["text"],)).fetchone()
                 if duplicate:
@@ -474,10 +483,12 @@ class SatireStream:
                 post_id = f"SMK-{last + 1:03d}"
                 version = 1
                 db.execute("""INSERT INTO satire_posts
-                    (id,text,genre,topic,mix_type,product_context,selected,status,current_version,origin,source_submission_id)
-                    VALUES(?,?,?,?,?,?,1,'draft',1,'user',?)""",
+                    (id,text,genre,topic,mix_type,product_context,selected,status,current_version,origin,
+                     source_submission_id,scheduled_at)
+                    VALUES(?,?,?,?,?,?,1,?,1,'user',?,?)""",
                     (post_id, candidate["text"], candidate["genre"], candidate["topic"],
-                     candidate["mix_type"], candidate["product_context"], submission["id"]))
+                     candidate["mix_type"], candidate["product_context"],
+                     "scheduled" if requested_slot else "draft", submission["id"], requested_slot))
             db.execute("""INSERT INTO satire_versions
                 (post_id,version,text,genre,topic,mix_type,product_context,source,instruction,created_at,
                  image_path,image_sha256,visual_role,visual_prompt,visual_source_version,visual_state,visual_last_attempt)
@@ -600,7 +611,7 @@ class SatireStream:
                 if slot <= now:
                     continue
                 stamp = iso_utc(slot)
-                if db.execute("SELECT 1 FROM satire_posts WHERE scheduled_at=?", (stamp,)).fetchone():
+                if not self.store._slot_free(db, stamp):
                     continue
                 if launch_pending:
                     post_id = launch_pending.pop(0)
@@ -636,7 +647,7 @@ class SatireStream:
             if slot <= local:
                 continue
             stamp = iso_utc(slot)
-            if not db.execute("SELECT 1 FROM satire_posts WHERE scheduled_at=?", (stamp,)).fetchone():
+            if self.store._slot_free(db, stamp):
                 return stamp
         raise PultError("Нет свободного утреннего слота SMK_SATIRE в ближайшие 90 дней")
 
@@ -653,6 +664,9 @@ class SatireStream:
             stamp = row["scheduled_at"] if row["status"] == "scheduled" else self._free_slot(db, now)
             if stamp <= iso_utc(now):
                 raise PultError("Время публикации прошло; сначала перенесите публикацию")
+            if db.execute("""SELECT 1 FROM item_channels WHERE channel='telegram' AND selected=1
+                AND scheduled_at=? AND status!='rejected'""", (stamp,)).fetchone():
+                raise PultError("Слот уже занят основным контентом")
             db.execute("UPDATE satire_posts SET status='approved',scheduled_at=? WHERE id=?", (stamp, post_id))
             db.execute("UPDATE satire_submissions SET status='APPROVED',reviewed_at=? "
                        "WHERE result_post_id=? AND status='MODERATION' AND last_error IS NULL",

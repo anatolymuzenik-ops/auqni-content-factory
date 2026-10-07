@@ -31,20 +31,24 @@ def _label(value):
     return compact[:87] + "…" if len(compact) > 90 else compact or "Без темы"
 
 
-def _chunks(lines):
-    output, current = [], ""
-    for line in lines:
+def _chunks(lines, with_actions=False):
+    output, current, actions = [], "", []
+    for entry in lines:
+        line, action = entry if isinstance(entry, tuple) else (entry, None)
         piece = line + "\n"
         if current and len(current) + len(piece) > MAX_MESSAGE:
-            output.append(current.rstrip())
-            current = ""
+            output.append((current.rstrip(), actions) if with_actions else current.rstrip())
+            current, actions = "", []
         current += piece
+        if action:
+            actions.append(action)
     if current:
-        output.append(current.rstrip())
+        output.append((current.rstrip(), actions) if with_actions else current.rstrip())
     return output
 
 
-def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=False, now=None):
+def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=False, now=None,
+                      with_actions=False):
     """Use configured slots as the only source of free times; do not mutate state."""
     if days not in (7, 14):
         raise ValueError("Only 7 or 14 days are supported")
@@ -73,6 +77,17 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
     main_total = main_busy = main_free = main_passed = 0
     satire_total = satire_busy = satire_free = satire_passed = 0
     day_lines = []
+    mode = "free" if free_only else "all"
+    def open_action(kind, post_id):
+        label = f"Открыть · {post_id}" if kind == "smk" else f"Открыть · №{post_id}"
+        return (label, f"schedule:open:{kind}:{post_id}:{days}:{mode}")
+
+    def add_action(kind, stamp, day, clock):
+        epoch = int(datetime.fromisoformat(stamp).timestamp())
+        label = "SMK" if kind == "smk" else "основной"
+        return (f"Добавить пост · {day:%d.%m} {clock} {label}",
+                f"schedule:add:{kind}:{epoch}:{days}:{mode}")
+
     for offset in range(days):
         day = first + timedelta(days=offset)
         entries = []
@@ -92,26 +107,32 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
                     for row in rows:
                         entries.append((expected_main, f"{expected_main} | Основной контент\n"
                                         f"{main_variant(store, canonical_main, row['id'], row['current_version'])}\n"
-                                        f"«{_label(row['title'])}»\n{STATUS.get(row['status'], row['status'])}"))
+                                        f"«{_label(row['title'])}»\n{STATUS.get(row['status'], row['status'])}",
+                                        open_action("main", row["id"])))
+            elif slot > local_now and not store.slot_is_free(canonical_main):
+                main_busy += 1
+                if not free_only:
+                    entries.append((expected_main, f"{expected_main} | Основной контент\nЗАНЯТО ДРУГИМ ПОТОКОМ", None))
             elif slot > local_now:
                 main_free += 1
                 progress = store.get_kv(f"autoplan_today_state:{canonical_main}")
                 label = {"searching": "ИДЁТ ПОДБОР", "not_found": "МАТЕРИАЛ НЕ НАЙДЕН"}.get(
                     progress, "СВОБОДНЫЙ СЛОТ")
-                entries.append((expected_main, f"{expected_main} | Основной контент\n{label}"))
+                entries.append((expected_main, f"{expected_main} | Основной контент\n{label}",
+                                add_action("main", canonical_main, day, expected_main)))
             else:
                 main_passed += 1
                 if not free_only:
                     progress = store.get_kv(f"autoplan_today_state:{canonical_main}")
                     label = "МАТЕРИАЛ НЕ НАЙДЕН" if progress == "not_found" else "Время слота прошло"
-                    entries.append((expected_main, f"{expected_main} | Основной контент\n{label}"))
+                    entries.append((expected_main, f"{expected_main} | Основной контент\n{label}", None))
         if expected_satire:
             hour, minute = map(int, expected_satire.split(":"))
             slot = datetime.combine(day, time(hour, minute), moscow_zone())
             stamp = iso_utc(slot)
             if not satire_on:
                 if not free_only:
-                    entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE\nПоток выключен"))
+                    entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE\nПоток выключен", None))
             else:
                 satire_total += 1
                 rows = satire_at.pop(stamp, [])
@@ -120,14 +141,20 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
                     if not free_only:
                         for row in rows:
                             entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE · {row['id']}\n"
-                                            f"«{_label(row['text'])}»\n{STATUS.get(row['status'], row['status'])}"))
+                                            f"«{_label(row['text'])}»\n{STATUS.get(row['status'], row['status'])}",
+                                            open_action("smk", row["id"])))
+                elif slot > local_now and not store.slot_is_free(stamp):
+                    satire_busy += 1
+                    if not free_only:
+                        entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE\nЗАНЯТО ДРУГИМ ПОТОКОМ", None))
                 elif slot > local_now:
                     satire_free += 1
-                    entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE\nСВОБОДНЫЙ СЛОТ"))
+                    entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE\nСВОБОДНЫЙ СЛОТ",
+                                    add_action("smk", stamp, day, expected_satire)))
                 else:
                     satire_passed += 1
                     if not free_only:
-                        entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE\nВремя слота прошло"))
+                        entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE\nВремя слота прошло", None))
         # Existing manually moved publications are visible without inventing free off-grid slots.
         if not free_only:
             for stamp in list(main_at):
@@ -137,18 +164,20 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
                         clock = slot.strftime("%H:%M")
                         entries.append((clock, f"{clock} | Основной контент (вне регулярного слота)\n"
                                                f"{main_variant(store, stamp, row['id'], row['current_version'])}\n"
-                                               f"«{_label(row['title'])}»\n{STATUS.get(row['status'], row['status'])}"))
+                                               f"«{_label(row['title'])}»\n{STATUS.get(row['status'], row['status'])}",
+                                               open_action("main", row["id"])))
             for stamp in list(satire_at):
                 slot = datetime.fromisoformat(stamp).astimezone(moscow_zone())
                 if slot.date() == day:
                     for row in satire_at.pop(stamp):
                         clock = slot.strftime("%H:%M")
                         entries.append((clock, f"{clock} | SMK_SATIRE · {row['id']} (вне регулярного слота)\n"
-                                               f"«{_label(row['text'])}»\n{STATUS.get(row['status'], row['status'])}"))
+                                               f"«{_label(row['text'])}»\n{STATUS.get(row['status'], row['status'])}",
+                                               open_action("smk", row["id"])))
         if entries:
             day_lines.append(f"{WEEKDAYS[day.weekday()]} {day:%d.%m}")
-            for _, body in sorted(entries, key=lambda entry: entry[0]):
-                day_lines.extend((body, ""))
+            for _, body, action in sorted(entries, key=lambda entry: entry[0]):
+                day_lines.extend(((body, action), ""))
 
     title = "СВОБОДНЫЕ СЛОТЫ" if free_only else "РАСПИСАНИЕ AUQNI"
     lines = [f"{title} · {days} дней", f"{first:%d.%m}–{(end - timedelta(days=1)):%d.%m}", "",
@@ -163,4 +192,4 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
         lines.append("Свободных слотов нет." if free_only else "Публикационных слотов нет.")
     if free_only:
         lines.extend(("", f"Всего свободно: {main_free + satire_free}"))
-    return _chunks(lines)
+    return _chunks(lines, with_actions)
