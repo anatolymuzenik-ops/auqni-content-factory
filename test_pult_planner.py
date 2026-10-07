@@ -1,4 +1,5 @@
 import os
+import json
 from pathlib import Path
 import tempfile
 import unittest
@@ -91,6 +92,79 @@ class TodaySlotTests(unittest.TestCase):
 
     def slot(self):
         return iso_utc(datetime(2026, 10, 7, 13, tzinfo=moscow_zone()))
+
+    def callback(self, action, item_id):
+        with patch("telegram_pult.utc_now", return_value=TODAY):
+            self.pult.handle_callback({"id": "callback", "from": {"id": 123},
+                                       "message": {"chat": {"id": 123}},
+                                       "data": f"{action}:{item_id}:1"})
+
+    def three_candidates(self):
+        self.planner.propose = lambda slots, history: ([
+            {"topic": f"Сильная тема {n} для службы качества", "problem": "Есть проблема",
+             "angle": "Есть проверяемый подход", "stream": "smk_practice", "evidence_ids": []}
+            for n in (1, 2, 3)], [], [])
+
+    def test_reject_retries_next_candidate_then_reports_exhaustion(self):
+        self.three_candidates()
+        self.store.set_kv("autoplan_last_attempt", "2026-10-07")
+        self.assertEqual(self.pult.plan_today(TODAY), 1)
+        for rejected_id, next_id in ((1, 2), (2, 3)):
+            self.callback("reject", rejected_id)
+            self.assertEqual(self.store.get(rejected_id)["status"], "rejected")
+            self.assertIsNone(self.store.get(rejected_id)["channels"]["telegram"]["scheduled_at"])
+            self.assertEqual(self.pult.plan_autonomously(TODAY), 1)
+            self.assertEqual(self.store.get(next_id)["channels"]["telegram"]["scheduled_at"], self.slot())
+        self.callback("reject", 3)
+        self.assertEqual(self.pult.plan_autonomously(TODAY), 0)
+        self.assertEqual(json.loads(self.store.get_kv(f"autoplan_today_rejected:{self.slot()}")), [1, 2, 3])
+        self.assertEqual(len(self.store.topic_history()), 3)
+        notices = [fields["text"] for method, fields, _ in self.api.calls if method == "sendMessage"]
+        self.assertEqual(len([notice for notice in notices if "остался свободным" in notice]), 1)
+        self.assertEqual(self.pult.plan_autonomously(TODAY), 0)
+        self.assertFalse(self.publisher.sent)
+
+    def test_approval_stops_retry(self):
+        self.three_candidates()
+        self.assertEqual(self.pult.plan_today(TODAY), 1)
+        self.callback("reject", 1)
+        self.assertEqual(self.pult.plan_today(TODAY), 1)
+        with patch("pult_store.utc_now", return_value=TODAY):
+            self.callback("approve", 2)
+        self.assertEqual(self.pult.plan_today(TODAY), 0)
+        self.assertEqual(len(self.store.topic_history()), 2)
+        self.assertEqual(self.store.get(2)["channels"]["telegram"]["status"], "approved")
+        self.pult.tick(TODAY)
+        self.assertFalse(self.publisher.sent)
+
+    def test_reject_limit_bounds_retry(self):
+        self.three_candidates()
+        self.store.set_kv(f"autoplan_today_rejected:{self.slot()}", json.dumps(list(range(10, 16))))
+        self.assertEqual(self.pult.plan_today(TODAY), 0)
+        self.assertEqual(self.planner.calls, 0)
+        self.assertEqual(self.pult.plan_today(TODAY), 0)
+        notices = [fields["text"] for method, fields, _ in self.api.calls if method == "sendMessage"]
+        self.assertEqual(len([notice for notice in notices if "остался свободным" in notice]), 1)
+
+    def test_off_grid_reject_does_not_restart_today(self):
+        item_id = self.store.create("post", "Другой слот", "{}", ("telegram",))
+        self.store.enqueue(item_id, "Подготовь", {"text": "Тема"})
+        self.assertTrue(self.pult.process_one_job())
+        self.store.set_schedule(item_id, "telegram", iso_utc(datetime(2026, 10, 8, 18, tzinfo=moscow_zone())))
+        self.callback("reject", item_id)
+        self.assertIsNone(self.store.get_kv(f"autoplan_today_rejected:{self.slot()}"))
+        self.assertEqual(self.store.get(item_id)["status"], "rejected")
+
+    def test_reject_uses_next_ready_material_before_planner(self):
+        for number in (1, 2):
+            item_id = self.store.create("post", f"Готовый материал {number}", "{}", ("telegram",))
+            self.store.enqueue(item_id, "Подготовь", {"text": f"Тема {number}"})
+            self.assertTrue(self.pult.process_one_job())
+        self.assertEqual(self.pult.plan_today(TODAY), 1)
+        self.callback("reject", 1)
+        self.assertEqual(self.pult.plan_today(TODAY), 1)
+        self.assertEqual(self.store.get(2)["channels"]["telegram"]["scheduled_at"], self.slot())
+        self.assertEqual(self.planner.calls, 0)
 
     def test_ready_unplanned_material_is_offered_first(self):
         item_id = self.store.create("post", "Готовый материал", "{}", ("telegram",))

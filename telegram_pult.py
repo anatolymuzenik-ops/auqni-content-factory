@@ -115,6 +115,8 @@ class BotAPI:
 
 
 class Pult:
+    MAX_TODAY_REJECTIONS = 6
+
     def __init__(self, root, config, api, store=None, pipeline=None, publisher=None, planner=None):
         self.root = Path(root).resolve()
         self.workspace = self.root.parent.parent.resolve()
@@ -213,6 +215,12 @@ class Pult:
         if self.store.get_kv(key):
             return 0
         self.store.set_kv(key, slot)  # one exhaustive attempt, even across worker restarts
+        rejected = json.loads(self.store.get_kv(f"autoplan_today_rejected:{slot}") or "[]")
+        if len(rejected) >= self.MAX_TODAY_REJECTIONS:
+            self.safe_say(f"Основной слот сегодня, {clock} МСК, остался свободным: "
+                          f"отклонены {len(rejected)} кандидатов для этого слота. "
+                          "Без «Принято» публикации нет.")
+            return 0
 
         def offer(item_id):
             self.store.set_schedule(item_id, self.channel, slot)
@@ -237,8 +245,16 @@ class Pult:
                 if offer(item["id"]):
                     return 1
 
+        history = self.store.topic_history()
+        for row in list(history):
+            try:
+                original_topic = json.loads(row["brief"]).get("planner", {}).get("topic")
+            except (ValueError, TypeError, AttributeError):
+                original_topic = None
+            if original_topic:
+                history.append({**row, "title": original_topic})
         known_titles = {re.sub(r"\W+", " ", row["title"].casefold()).strip()
-                        for row in self.store.topic_history()}
+                        for row in history}
         for content in sorted((self.root / "posts").glob("*-content.json"), reverse=True):
             item_id = None
             image = self.root / "images" / (content.name.removesuffix("-content.json") + ".png")
@@ -293,10 +309,14 @@ class Pult:
         checked = accepted = 0
         planner_failed = False
         try:
-            candidates, evidence, errors = planner.propose([slot], self.store.topic_history())
+            candidates, evidence, errors = planner.propose([slot], history)
             checked, accepted = getattr(planner, "last_review_counts", (len(candidates), len(candidates)))
             print(f"Today planner candidates: received={checked}, passed={accepted}", file=sys.stderr)
             for candidate in candidates:
+                normalized = re.sub(r"\W+", " ", candidate["topic"].casefold()).strip()
+                if normalized in known_titles:
+                    continue
+                known_titles.add(normalized)
                 inputs = candidate_inputs(candidate, evidence)
                 inputs["urgent_today"] = True
                 item_id = self.store.create("post", candidate["topic"], json.dumps(inputs, ensure_ascii=False), (self.channel,))
@@ -609,8 +629,16 @@ class Pult:
             self.store.to_plan(item_id, self.channel)
             self.say(f"№{item_id} оставлен в контент-плане без статуса «Принято».")
         elif action == "reject":
-            self.store.reject(item_id, self.channel)
-            self.say(f"№{item_id} отклонён.")
+            scheduled = item["channels"][self.channel]["scheduled_at"]
+            now = utc_now()
+            local = now.astimezone(moscow_zone())
+            clock = self.schedule.get(str(local.weekday()))
+            today_slot = (iso_utc(datetime(local.year, local.month, local.day, *map(int, clock.split(":")),
+                                           tzinfo=moscow_zone())) if clock else None)
+            retry_slot = scheduled if scheduled == today_slot and scheduled > iso_utc(now) else None
+            self.store.reject(item_id, self.channel, retry_slot=retry_slot)
+            self.say(f"№{item_id} отклонён." +
+                     (" Подбираю следующий материал для свободного слота." if retry_slot else ""))
 
     def publish_item(self, item_id, version, scheduled, now=None, channel="telegram"):
         publisher = self.publishers.get(channel)

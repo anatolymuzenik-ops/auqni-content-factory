@@ -350,15 +350,26 @@ class Store:
             db.execute("UPDATE item_channels SET approved_version=NULL, status=? WHERE item_id=? AND channel=?",
                        ("ready" if has_material else ("needs_material" if item["current_version"] else "idea"), item_id, channel))
 
-    def reject(self, item_id, channel):
+    def reject(self, item_id, channel, retry_slot=None):
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            state = db.execute("SELECT status FROM item_channels WHERE item_id=? AND channel=? AND selected=1", (item_id, channel)).fetchone()
+            state = db.execute("SELECT status,scheduled_at FROM item_channels WHERE item_id=? AND channel=? AND selected=1", (item_id, channel)).fetchone()
             if not state or state["status"] in ("publishing", "published", "uncertain"):
                 raise PultError("Материал уже нельзя отклонить в этом канале")
+            if retry_slot and state["scheduled_at"] != retry_slot:
+                raise PultError("Слот публикации изменился; обновите карточку")
             db.execute("UPDATE item_channels SET status='rejected', approved_version=NULL, scheduled_at=NULL WHERE item_id=? AND channel=?", (item_id, channel))
             if not db.execute("SELECT 1 FROM item_channels WHERE item_id=? AND selected=1 AND status != 'rejected'", (item_id,)).fetchone():
                 db.execute("UPDATE items SET status='rejected' WHERE id=?", (item_id,))
+            if retry_slot:
+                key = f"autoplan_today_rejected:{retry_slot}"
+                row = db.execute("SELECT value FROM kv WHERE key=?", (key,)).fetchone()
+                rejected = json.loads(row[0]) if row else []
+                if item_id not in rejected:
+                    rejected.append(item_id)
+                db.execute("INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                           (key, json.dumps(rejected)))
+                db.execute("DELETE FROM kv WHERE key=?", (f"autoplan_today_attempt:{retry_slot[:10]}",))
 
     def claim_publish(self, item_id, version, channel, scheduled=False, now=None):
         with self.connect() as db:
