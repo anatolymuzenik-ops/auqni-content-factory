@@ -593,6 +593,8 @@ class Pult:
                 self.handle_message(update["message"])
             elif "callback_query" in update:
                 self.handle_callback(update["callback_query"])
+            elif self.satire and "message_reaction_count" in update:
+                self.satire.record_reaction_count(update["message_reaction_count"])
         except PultError as error:
             self.say(str(error))
 
@@ -624,8 +626,11 @@ class Pult:
             while True:
                 self.tick()
                 try:
+                    allowed = ["message", "callback_query"]
+                    if self.satire:
+                        allowed.append("message_reaction_count")
                     updates = self.api.call("getUpdates", {"offset": self.store.get_offset(), "timeout": 5,
-                                                           "allowed_updates": ["message", "callback_query"]}, timeout=15)
+                                                           "allowed_updates": allowed}, timeout=15)
                     for update in updates or []:
                         self.handle_update(update)
                         self.store.set_offset(update["update_id"] + 1)
@@ -658,6 +663,11 @@ def load_config(path):
         raise PultError("SMK_SATIRE runs Monday through Friday only")
     if type(satire.get("horizon_days", 10)) is not int or not 1 <= satire.get("horizon_days", 10) <= 30:
         raise PultError("Invalid SMK_SATIRE horizon")
+    launch = satire.get("launch_queue", [])
+    if (not isinstance(launch, list) or len(launch) not in (0, 10)
+            or any(not isinstance(post_id, str) or not re.fullmatch(r"SMK-\d{3}", post_id) for post_id in launch)
+            or len(set(launch)) != len(launch)):
+        raise PultError("Invalid SMK_SATIRE launch queue")
     return config
 
 

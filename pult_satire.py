@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
 
@@ -11,6 +11,8 @@ from pult_core import PultError, iso_utc, local_label, moscow_zone, utc_now
 
 MIX = ("pure", "problem", "pure", "soft", "pure",
        "problem", "pure", "soft", "pure", "problem")
+MAKEUP = ("pure", "soft", "pure", "pure", "soft",
+          "pure", "soft", "pure", "pure", "soft")
 
 
 def read_bank(path):
@@ -58,6 +60,15 @@ class SatireStream:
         added = []
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
+            launch = self.settings.get("launch_queue", [])
+            # The owner-approved first ten are intentionally 4/6/0. The next ten
+            # restore 50/30/20 across the first twenty planned posts.
+            launch_pending = [post_id for post_id in launch if db.execute(
+                "SELECT 1 FROM satire_posts WHERE id=? AND status='unused' AND selected=1",
+                (post_id,)).fetchone()]
+            nonlaunch_count = db.execute(
+                "SELECT count(*) FROM satire_posts WHERE status!='unused' AND id NOT IN (" +
+                ",".join("?" for _ in launch) + ")", launch).fetchone()[0] if launch else 0
             count = db.execute("SELECT count(*) FROM satire_posts WHERE status NOT IN ('unused','rejected')").fetchone()[0]
             for offset in range(horizon + 1):
                 day = (now + timedelta(days=offset)).date()
@@ -69,9 +80,16 @@ class SatireStream:
                 stamp = iso_utc(slot)
                 if db.execute("SELECT 1 FROM satire_posts WHERE scheduled_at=?", (stamp,)).fetchone():
                     continue
-                kind = MIX[count % len(MIX)]
-                row = db.execute("""SELECT id,text FROM satire_posts
-                    WHERE selected=1 AND status='unused' AND mix_type=? ORDER BY id LIMIT 1""", (kind,)).fetchone()
+                if launch_pending:
+                    post_id = launch_pending.pop(0)
+                    row = db.execute("SELECT id,text FROM satire_posts WHERE id=?", (post_id,)).fetchone()
+                else:
+                    kind = (MAKEUP[nonlaunch_count] if launch and nonlaunch_count < len(MAKEUP)
+                            else MIX[(nonlaunch_count - len(MAKEUP)) % len(MIX)] if launch
+                            else MIX[count % len(MIX)])
+                    row = db.execute("""SELECT id,text FROM satire_posts
+                        WHERE selected=1 AND status='unused' AND mix_type=? ORDER BY id LIMIT 1""", (kind,)).fetchone()
+                    nonlaunch_count += 1
                 if not row:
                     break
                 db.execute("UPDATE satire_posts SET status='scheduled', scheduled_at=? WHERE id=?", (stamp, row["id"]))
@@ -126,6 +144,39 @@ class SatireStream:
             rows = [r[0] for r in db.execute("SELECT id FROM satire_posts WHERE status='publishing'")]
             db.execute("UPDATE satire_posts SET status='uncertain' WHERE status='publishing'")
             return rows
+
+    def record_reaction_count(self, update):
+        """Persist an observed Bot API count snapshot for our published post only."""
+        chat = update.get("chat", {})
+        message_id = update.get("message_id")
+        timestamp = update.get("date")
+        reactions = update.get("reactions")
+        if (not isinstance(chat, dict) or chat.get("username") != "auqni_qms"
+                or type(message_id) is not int or type(timestamp) is not int
+                or not isinstance(reactions, list)):
+            return False
+        counts = []
+        for item in reactions:
+            if not isinstance(item, dict) or not isinstance(item.get("type"), dict) or type(item.get("total_count")) is not int:
+                return False
+            counts.append({"type": item["type"], "count": item["total_count"]})
+        try:
+            observed_at = iso_utc(datetime.fromtimestamp(timestamp, tz=timezone.utc))
+        except (OverflowError, OSError, ValueError):
+            return False
+        snapshot = json.dumps({"observed_at": observed_at, "counts": counts,
+                               "total": sum(entry["count"] for entry in counts),
+                               "source": "telegram_bot_api_message_reaction_count"}, ensure_ascii=False)
+        with self.store.connect() as db:
+            row = db.execute("SELECT id,reactions_json FROM satire_posts WHERE external_id=? AND status='published'",
+                             (str(message_id),)).fetchone()
+            if not row:
+                return False
+            old = json.loads(row["reactions_json"]) if row["reactions_json"] else None
+            if old and old["observed_at"] > observed_at:
+                return False
+            db.execute("UPDATE satire_posts SET reactions_json=? WHERE id=?", (snapshot, row["id"]))
+            return True
 
 
 def review_label(post_id, text, stamp):

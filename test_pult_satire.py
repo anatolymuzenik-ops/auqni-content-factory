@@ -49,6 +49,44 @@ class SatireTests(unittest.TestCase):
         self.assertFalse(config["smk_satire"]["enabled"])
         self.assertEqual(config["smk_satire"]["time"], "08:30")
 
+    def test_launch_queue_then_mix_catches_up(self):
+        config = json.loads((ROOT / "pult_config.json").read_text())
+        with tempfile.TemporaryDirectory() as temp:
+            stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
+                                  ROOT / "content/smk_satire_bank.json",
+                                  {**config["smk_satire"], "horizon_days": 29})
+            stream.seed()
+            planned = stream.plan(datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc))
+            self.assertGreaterEqual(len(planned), 20)
+            planned = planned[:20]
+            self.assertEqual([p[0] for p in planned[:10]], config["smk_satire"]["launch_queue"])
+            from collections import Counter
+            self.assertEqual(Counter(stream.get(p[0])["mix_type"] for p in planned),
+                             {"pure": 10, "problem": 6, "soft": 4})
+            self.assertEqual(len({p[0] for p in planned}), 20)
+
+    def test_reaction_count_snapshot_is_observed_and_scoped(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
+                                  ROOT / "content/smk_satire_bank.json",
+                                  {"time": "08:30", "horizon_days": 1})
+            stream.seed()
+            before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
+            post_id = stream.plan(before)[0][0]
+            stream.approve(post_id, before)
+            self.assertTrue(stream.claim(post_id, datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)))
+            stream.result(post_id, 42)
+            update = {"chat": {"username": "auqni_qms"}, "message_id": 42,
+                      "date": 1791522000,
+                      "reactions": [{"type": {"type": "emoji", "emoji": "👍"}, "total_count": 3}]}
+            self.assertTrue(stream.record_reaction_count(update))
+            saved = json.loads(stream.get(post_id)["reactions_json"])
+            self.assertEqual(saved["total"], 3)
+            self.assertEqual(saved["source"], "telegram_bot_api_message_reaction_count")
+            self.assertFalse(stream.record_reaction_count({**update, "chat": {"username": "other"}}))
+            self.assertFalse(stream.record_reaction_count({**update, "message_id": 43}))
+            self.assertEqual(json.loads(stream.get(post_id)["reactions_json"]), saved)
+
     def test_pult_sends_text_only_after_owner_approval(self):
         class API:
             def __init__(self):
@@ -72,7 +110,7 @@ class SatireTests(unittest.TestCase):
             before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
             due = datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)
             pult.tick(before)
-            post_id = "SMK-001"
+            post_id = "SMK-007"
             self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
             pult.satire.approve(post_id, before)
             pult.tick(due)

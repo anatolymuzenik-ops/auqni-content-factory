@@ -24,7 +24,8 @@
     "enabled": false,
     "time": "08:30",
     "weekdays": [0, 1, 2, 3, 4],
-    "horizon_days": 10
+    "horizon_days": 10,
+    "launch_queue": ["SMK-007", "SMK-016", "SMK-021", "SMK-023", "SMK-031", "SMK-003", "SMK-024", "SMK-027", "SMK-032", "SMK-010"]
   },
   "max_attachment_bytes": 20971520,
   "transcription_model": "gpt-4o-mini-transcribe",
