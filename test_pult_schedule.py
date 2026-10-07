@@ -298,7 +298,8 @@ class ScheduleTests(unittest.TestCase):
         free = "\n".join(schedule_messages(self.store, SCHEDULE, self.config["smk_satire"],
                                            now=NOW, free_only=True))
         self.assertIn("SMK_SATIRE: занято 1 из 5, свободно 3, прошло 1", full)
-        self.assertIn("SMK_SATIRE · SMK-007", full)
+        self.assertIn("SMK_SATIRE · Пост 1", full)
+        self.assertNotIn("SMK-007", full)
         self.assertIn("Запланировано", full)
         self.assertIn("Всего свободно: 7", free)
 

@@ -26,6 +26,19 @@ def main_variant(store, slot, item_id, version=1):
     return f"Вариант {number}" + (f" · версия {version}" if version and version > 1 else "")
 
 
+def satire_display_number(store, post_id):
+    """Position in the existing satire schedule, then unscheduled drafts."""
+    with store.connect() as db:
+        ids = [row[0] for row in db.execute("""SELECT id FROM satire_posts
+            WHERE status NOT IN ('unused','rejected')
+            ORDER BY CASE WHEN scheduled_at IS NULL THEN 1 ELSE 0 END,
+                     scheduled_at, CAST(SUBSTR(id,5) AS INTEGER), id""")]
+    try:
+        return ids.index(post_id) + 1
+    except ValueError:
+        raise ValueError("SMK post is not in the current queue") from None
+
+
 def _label(value):
     compact = " ".join((value or "").split())
     return compact[:87] + "…" if len(compact) > 90 else compact or "Без темы"
@@ -79,7 +92,8 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
     day_lines = []
     mode = "free" if free_only else "all"
     def open_action(kind, post_id):
-        label = f"Открыть · {post_id}" if kind == "smk" else f"Открыть · №{post_id}"
+        label = (f"Открыть · Пост {satire_display_number(store, post_id)}" if kind == "smk"
+                 else f"Открыть · №{post_id}")
         return (label, f"schedule:open:{kind}:{post_id}:{days}:{mode}")
 
     def add_action(kind, stamp, day, clock):
@@ -140,7 +154,7 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
                     satire_busy += 1
                     if not free_only:
                         for row in rows:
-                            entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE · {row['id']}\n"
+                            entries.append((expected_satire, f"{expected_satire} | SMK_SATIRE · Пост {satire_display_number(store, row['id'])}\n"
                                             f"«{_label(row['text'])}»\n{STATUS.get(row['status'], row['status'])}",
                                             open_action("smk", row["id"])))
                 elif slot > local_now and not store.slot_is_free(stamp):
@@ -171,7 +185,7 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
                 if slot.date() == day:
                     for row in satire_at.pop(stamp):
                         clock = slot.strftime("%H:%M")
-                        entries.append((clock, f"{clock} | SMK_SATIRE · {row['id']} (вне регулярного слота)\n"
+                        entries.append((clock, f"{clock} | SMK_SATIRE · Пост {satire_display_number(store, row['id'])} (вне регулярного слота)\n"
                                                f"«{_label(row['text'])}»\n{STATUS.get(row['status'], row['status'])}",
                                                open_action("smk", row["id"])))
         if entries:

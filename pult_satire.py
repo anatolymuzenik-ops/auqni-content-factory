@@ -750,7 +750,11 @@ class SatireStream:
             return True
 
 
-def review_label(post_id, text, stamp, version=1):
+def review_heading(number, genre, stamp, version=1):
     when = datetime.fromisoformat(stamp).astimezone(moscow_zone()).strftime("%d.%m · %H:%M МСК") if stamp else "слот после принятия"
-    revision = f" · редакция {version}" if version > 1 else ""
-    return f"Сатира · {when}{revision}\n\n{text}"
+    format_label = f"{genre} · " if genre else ""
+    return f"Пост {number} · v{version}\n{format_label}{when}"
+
+
+def review_label(number, genre, text, stamp, version=1):
+    return review_heading(number, genre, stamp, version) + f"\n\n{text}"

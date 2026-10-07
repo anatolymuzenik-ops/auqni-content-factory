@@ -95,6 +95,10 @@ class SatireTests(unittest.TestCase):
                                      **content})
 
             click(first, 1)
+            prompt = [payload["text"] for method, payload in api.calls if method == "sendMessage"][-1]
+            self.assertIn("Редактируем Пост 1 · v1", prompt)
+            self.assertIn(f"«{pult.satire.get(first)['text']}»", prompt)
+            self.assertNotIn(first, prompt)
             self.assertEqual(pult.store.get_pending(), {"kind": "edit_input", "post_id": first, "version": 1})
             self.assertEqual(pult.satire.get(first)["status"], "editing")
             self.assertNotIn(first, [row["id"] for row in
@@ -111,6 +115,10 @@ class SatireTests(unittest.TestCase):
             self.assertEqual(pult.satire.get(second)["current_version"], 1)
 
             click(second, 1)
+            prompt = [payload["text"] for method, payload in api.calls if method == "sendMessage"][-1]
+            self.assertIn("Редактируем Пост 2 · v1", prompt)
+            self.assertIn(f"«{pult.satire.get(second)['text']}»", prompt)
+            self.assertNotIn(second, prompt)
             send(voice={"file_id": "second-voice", "file_size": 100})
             self.assertEqual(pult.satire.get(second)["status"], "editing")
             self.assertTrue(pult.process_one_satire_submission())
@@ -131,10 +139,23 @@ class SatireTests(unittest.TestCase):
             reviews = [payload for method, payload in api.calls if method == "sendPhoto"]
             self.assertEqual(len(reviews), 2)
             for post_id, payload in zip((first, second), reviews):
+                number = 1 if post_id == first else 2
+                self.assertIn(f"Пост {number} · v2", payload["caption"])
+                self.assertIn(pult.satire.get(post_id)["text"], payload["caption"])
+                self.assertNotIn(post_id, payload["caption"])
+                self.assertIn(pult.satire.get(post_id)["genre"], payload["caption"])
                 buttons = json.loads(payload["reply_markup"])["inline_keyboard"][0]
                 self.assertEqual([button["text"] for button in buttons],
                                  ["Принято", "Изменить", "Отклонить"])
                 self.assertTrue(buttons[0]["callback_data"].startswith(f"satire:approve:{post_id}:2:"))
+            revised = pult.satire.get(second)
+            revised_image = pult.satire.version(second, 2)["image_path"]
+            click(second, 2)
+            prompt = [payload["text"] for method, payload in api.calls if method == "sendMessage"][-1]
+            self.assertIn("Редактируем Пост 2 · v2", prompt)
+            self.assertIn(f"«{revised['text']}»", prompt)
+            self.assertEqual(pult.satire.get(second)["current_version"], 2)
+            self.assertEqual(pult.satire.version(second, 2)["image_path"], revised_image)
 
     def test_scheduled_bank_joke_is_expanded_before_visual_review(self):
         class API:
@@ -268,6 +289,45 @@ class SatireTests(unittest.TestCase):
             self.assertEqual(pult.satire.get(post_id)["status"], "rejected")
             pult.tick_satire(datetime(2026, 12, 1, tzinfo=timezone.utc))
             self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
+
+    def test_public_satire_payload_contains_only_final_text_and_image(self):
+        class API:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, method, payload, files=None):
+                self.calls.append((method, payload, files))
+                if payload.get("chat_id") == "@auqni_qms":
+                    return {"message_id": 17, "chat": {"username": "auqni_qms"}}
+                return {"message_id": len(self.calls)}
+
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {"AUQNI_OWNER_USER_ID": "123"}):
+            root = Path(temp)
+            (root / "content").mkdir()
+            (root / "content/smk_satire_bank.json").write_bytes((ROOT / "content/smk_satire_bank.json").read_bytes())
+            api = API()
+            pult = Pult(root, json.loads((ROOT / "pult_config.json").read_text()), api)
+            before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
+            post_id = pult.satire.plan(before)[0][0]
+            prepare_bank_visual(pult.satire, post_id, root)
+            pult.show_satire_review(post_id)
+            card = api.calls[-1][1]["caption"]
+            self.assertIn("Пост 1 · v1", card)
+            self.assertNotIn(post_id, card)
+            post = pult.satire.get(post_id)
+            pult.satire.approve(post_id, before, version=1)
+            due = datetime.fromisoformat(pult.satire.get(post_id)["scheduled_at"])
+            pult.tick_satire(due)
+            public = [(method, payload, files) for method, payload, files in api.calls
+                      if payload.get("chat_id") == "@auqni_qms"]
+            self.assertEqual(len(public), 1)
+            method, payload, files = public[0]
+            self.assertEqual(method, "sendPhoto")
+            self.assertEqual(payload, {"chat_id": "@auqni_qms", "caption": post["text"]})
+            self.assertNotIn("Пост 1", payload["caption"])
+            self.assertNotIn(post_id, payload["caption"])
+            self.assertNotIn(post["genre"], payload["caption"])
+            self.assertEqual(files["photo"][0], "satire.png")
 
     def test_bank_edit_keeps_versions_and_revokes_approval(self):
         with tempfile.TemporaryDirectory() as temp:
