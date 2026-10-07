@@ -115,6 +115,16 @@ class PultTests(unittest.TestCase):
         self.assertEqual(item["current_version"], 1)
         return item
 
+    def test_codex_action_uses_existing_owner_callback_gate(self):
+        from unittest.mock import Mock
+        result = Mock(stdout="Ответ передан в тот же thread T3 Code.\n", returncode=0)
+        with patch("telegram_pult.subprocess.run", return_value=result) as run:
+            self.callback("codex:do:abcdefghijklmnop", user=self.owner + 1)
+            run.assert_not_called()
+            self.callback("codex:do:abcdefghijklmnop")
+            run.assert_called_once()
+        self.assertEqual(self.api.calls[-1][1]["text"], "Ответ передан в тот же thread T3 Code.")
+
     def test_create_review_approve_and_edit_revokes_approval(self):
         self.make_post()
         self.assertTrue(any(method == "sendPhoto" for method, _, _ in self.api.calls))

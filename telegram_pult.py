@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import subprocess
 import sys
 import threading
 import time
@@ -569,6 +570,14 @@ class Pult:
             return
         data = query.get("data", "")
         self.api.call("answerCallbackQuery", {"callback_query_id": query["id"]})
+        codex_action = re.fullmatch(r"codex:do:([A-Za-z0-9_-]{12,32})", data)
+        if codex_action:
+            result = subprocess.run(
+                [sys.executable, "-B", "/home/anatoly/projects/codex-telegram-bridge/bridge.py",
+                 "act", codex_action.group(1)], capture_output=True, text=True, timeout=15,
+                check=False)
+            self.say(result.stdout.strip() or "Не удалось продолжить. Проверьте T3 Code.")
+            return
         schedule = re.fullmatch(r"schedule:(7|14):(all|free)", data)
         if schedule:
             self.show_schedule(int(schedule.group(1)), schedule.group(2) == "free")
