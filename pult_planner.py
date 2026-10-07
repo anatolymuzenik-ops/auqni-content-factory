@@ -93,6 +93,8 @@ def validate_candidates(answer, evidence, history, limit):
         angle = entry.get("angle")
         stream = entry.get("stream")
         ids = entry.get("evidence_ids", [])
+        quality = entry.get("quality_score")
+        reason = entry.get("quality_reason")
         if not all(isinstance(x, str) and 12 <= len(x.strip()) <= 180 for x in (topic, problem, angle)):
             continue
         if stream not in {"smk_problem", "smk_practice", "auqni_work", "external_environment"}:
@@ -101,13 +103,16 @@ def validate_candidates(answer, evidence, history, limit):
             continue
         if stream == "external_environment" and not ids:
             continue
+        if type(quality) is not int or quality < 8 or quality > 10 or not isinstance(reason, str) or len(reason.strip()) < 12:
+            continue
         key = re.sub(r"\W+", " ", topic.casefold()).strip()
         if key in used or re.search(r"\bCAPA\b", topic + problem + angle, re.I):
             continue
         used.add(key)
         output.append({"topic": topic.strip(), "problem": problem.strip(),
                        "angle": angle.strip(), "stream": stream,
-                       "evidence_ids": list(dict.fromkeys(ids))})
+                       "evidence_ids": list(dict.fromkeys(ids)),
+                       "quality_score": quality, "quality_reason": reason.strip()})
         if len(output) >= limit:
             break
     return output
@@ -146,6 +151,16 @@ class EditorialPlanner:
             objects = json.loads(registry.read_text(encoding="utf-8-sig")).get("objects", [])
             leads = [{"name": x.get("name"), "url": x.get("official_resource")}
                      for x in objects if x.get("official_resource")][:25]
+        source_registry = self.root / "docs/source-registry-v1.json"
+        registered_sources = []
+        if source_registry.is_file():
+            registered_sources = [
+                {"title": x.get("title"), "path": x.get("path"), "restrictions": x.get("restrictions", [])}
+                for x in json.loads(source_registry.read_text(encoding="utf-8")).get("sources", [])
+                if x.get("suitable_for_drafting") and (self.root / x.get("path", "")).is_file()
+            ]
+        signal_dir = self.workspace / "ПРОЕКТЫ/Продвижение_AUQNI/content_signals"
+        signals = [str(x) for x in sorted(signal_dir.glob("*.md"), reverse=True)[:20]] if signal_dir.is_dir() else []
         prior = [{"id": x["id"], "topic": x["title"], "status": x["status"]} for x in history]
         prompt = (
             "Ты редакционный планировщик существующего Контент-завода AUQNI. "
@@ -162,13 +177,21 @@ class EditorialPlanner:
             "Не утверждай, что сообщество часто обсуждает вопрос, по одному источнику. "
             "Не придумывай функции AUQNI, требования, цифры и преимущества. "
             "Не используй термин CAPA для соцсетей. Не заполняй слоты слабыми темами. "
+            "Проверь доступные сигналы и подходящие документы Source Registry, если они есть; "
+            "сигнал без проверяемого первичного источника не считай доказательством. "
+            "Предложи до трёх разных тем на свободный слот, расположи от сильнейшей к слабейшей. "
+            "Оцени конкретность проблемы, пользу для специалиста, проверяемость и редакционную новизну. "
+            "quality_score 8–10 давай только темам, которые действительно достойны подготовки; "
+            "если таких нет, верни пустой список. Для каждой дай краткую quality_reason. "
             "Верни только JSON: {\"candidates\":[{\"topic\":\"...\",\"problem\":\"...\","
             "\"angle\":\"...\",\"stream\":\"smk_problem|smk_practice|auqni_work|external_environment\","
-            "\"evidence_ids\":[\"...\"]}]}. Число тем не больше числа слотов.\n"
+            "\"evidence_ids\":[\"...\"],\"quality_score\":8,\"quality_reason\":\"...\"}]}.\n"
             f"Проект: {self.root}\nСвободные слоты: {json.dumps(slots, ensure_ascii=False)}\n"
             f"История: {json.dumps(prior, ensure_ascii=False)}\n"
             f"Прочитанные материалы: {json.dumps(evidence, ensure_ascii=False)}\n"
             f"Источники для дальнейшего поиска: {json.dumps(leads, ensure_ascii=False)}\n"
+            f"Source Registry: {json.dumps(registered_sources, ensure_ascii=False)}\n"
+            f"Доступные CONTENT_SIGNAL: {json.dumps(signals, ensure_ascii=False)}\n"
             f"Сбои источников: {json.dumps(errors, ensure_ascii=False)}\n"
         )
         with tempfile.TemporaryDirectory(prefix="auqni-plan-") as temp:
@@ -186,7 +209,10 @@ class EditorialPlanner:
                 answer = json.loads(result.read_text(encoding="utf-8"))
             except (OSError, subprocess.TimeoutExpired, ValueError):
                 raise PultError("Редакционный планировщик не вернул список тем") from None
-        return validate_candidates(answer, evidence, history, len(slots)), evidence, errors
+        limit = max(3, len(slots) * 3)
+        candidates = validate_candidates(answer, evidence, history, limit)
+        self.last_review_counts = (len(answer.get("candidates", [])), len(candidates))
+        return candidates, evidence, errors
 
 
 def candidate_inputs(candidate, evidence):

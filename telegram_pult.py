@@ -151,9 +151,10 @@ class Pult:
         local = now.astimezone(moscow_zone())
         if local.hour < int(settings.get("run_after_hour", 7)):
             return 0
+        urgent_added = self.plan_today(now)
         today = local.date().isoformat()
         if self.store.get_kv("autoplan_last_attempt") == today:
-            return 0
+            return urgent_added
         self.store.set_kv("autoplan_last_attempt", today)
         slots = upcoming_slots(self.schedule, self.store.occupied_slots(self.channel), now,
                                int(settings.get("min_lead_hours", 48)),
@@ -166,11 +167,13 @@ class Pult:
                 collect_evidence(self.root)
             except Exception as error:
                 print(f"Autoplanner source scan failed: {type(error).__name__}", file=sys.stderr)
-            return 0
+            return urgent_added
         planner = self.planner or EditorialPlanner(self.root, self.workspace,
                                                   self.config.get("pipeline_command"))
         try:
             candidates, evidence, errors = planner.propose(slots, self.store.topic_history())
+            counts = getattr(planner, "last_review_counts", (len(candidates), len(candidates)))
+            print(f"Autoplanner candidates: received={counts[0]}, passed={counts[1]}", file=sys.stderr)
             added = 0
             for slot, candidate in zip(slots, candidates):
                 inputs = candidate_inputs(candidate, evidence)
@@ -183,16 +186,147 @@ class Pult:
                 self.safe_say(f"Контент-завод выбрал {added} тем и готовит публикации заранее. "
                               "Готовые текст и визуал придут сюда на согласование; без «Принято» отправки не будет.")
             else:
-                self.safe_say("Контент-завод сегодня не нашёл достаточно сильных тем для свободных слотов. "
+                self.safe_say("Контент-завод не нашёл достаточно сильных тем для свободных слотов на будущем горизонте. "
                               "Публикации без вашего согласования не будет.")
             if errors:
                 print("Autoplanner source warning: " + ", ".join(errors[:5]), file=sys.stderr)
-            return added
+            return urgent_added + added
         except Exception as error:
             detail = str(error) if isinstance(error, PultError) else "внутренняя ошибка выбора тем"
             self.safe_say(f"Автоплан на сегодня не составлен: {detail}. Существующие материалы и расписание сохранены.")
             print(f"Autoplanner failed: {type(error).__name__}", file=sys.stderr)
+            return urgent_added
+
+    def plan_today(self, now=None):
+        """Try an open slot today using existing materials, then the existing planner and pipeline."""
+        from pult_planner import EditorialPlanner, candidate_inputs
+        now = now or utc_now()
+        local = now.astimezone(moscow_zone())
+        clock = self.schedule.get(str(local.weekday()))
+        if not clock:
             return 0
+        hour, minute = map(int, clock.split(":"))
+        slot = iso_utc(datetime(local.year, local.month, local.day, hour, minute, tzinfo=moscow_zone()))
+        if slot <= iso_utc(now) or slot in self.store.occupied_slots(self.channel):
+            return 0
+        key = f"autoplan_today_attempt:{local.date().isoformat()}"
+        if self.store.get_kv(key):
+            return 0
+        self.store.set_kv(key, slot)  # one exhaustive attempt, even across worker restarts
+
+        def offer(item_id):
+            self.store.set_schedule(item_id, self.channel, slot)
+            try:
+                self.show_review(item_id)
+                return True
+            except PultError:
+                self.store.set_schedule(item_id, self.channel, None)
+                return False
+
+        for item in self.store.list_plan():
+            state = item["channels"].get(self.channel, {})
+            if item["current_version"] and state.get("selected") and not state.get("scheduled_at") and state.get("status") == "ready":
+                version = self.store.version(item["id"])
+                material = version["channels"].get(self.channel, {})
+                try:
+                    image = Path(material["media_path"])
+                    self.publisher.validate(version["content_path"], material["text"], image, self.root)
+                    self.publisher.dry_run(version["content_path"], image)
+                except (PultError, KeyError, TypeError, OSError):
+                    continue
+                if offer(item["id"]):
+                    return 1
+
+        known_titles = {re.sub(r"\W+", " ", row["title"].casefold()).strip()
+                        for row in self.store.topic_history()}
+        for content in sorted((self.root / "posts").glob("*-content.json"), reverse=True):
+            item_id = None
+            image = self.root / "images" / (content.name.removesuffix("-content.json") + ".png")
+            if not image.is_file():
+                continue
+            try:
+                obj, title, _ = validate_content(content, self.root)
+                normalized = re.sub(r"\W+", " ", title.casefold()).strip()
+                if normalized in known_titles:
+                    continue
+                unresolved = obj.get("review", {}).get("unresolved", [])
+                if any("telegram" in str(field.get("field", "")).lower()
+                       for field in unresolved if isinstance(field, dict)):
+                    continue
+                text = obj["platforms"]["telegram"]["content"]
+                self.publisher.validate(content, text, image, self.root)
+                self.publisher.dry_run(content, image)
+                item_id = self.store.create("post", title, json.dumps({"archive_path": str(content)}, ensure_ascii=False),
+                                            (self.channel,))
+                self.store.set_schedule(item_id, self.channel, slot)
+                saved, media = snapshot_version(self.data, item_id, 1, content, {self.channel: image})
+                _, _, content_sha = validate_content(saved, self.root)
+                _, text_sha, media_sha = self.publisher.validate(saved, text, media[self.channel], self.root)
+                self.publisher.dry_run(saved, media[self.channel])
+                self.store.add_version(item_id, saved, content_sha, title, {self.channel: {
+                    "text": text, "media_path": media[self.channel],
+                    "text_sha256": text_sha, "media_sha256": media_sha}})
+                self.show_review(item_id)
+                return 1
+            except (PultError, OSError, ValueError, KeyError, TypeError) as error:
+                if item_id is not None:
+                    try:
+                        self.store.set_schedule(item_id, self.channel, None)
+                    except PultError:
+                        pass
+                    known_titles.add(normalized)
+                print(f"Archive review skipped: {type(error).__name__}", file=sys.stderr)
+
+        for item in self.store.list_plan():
+            state = item["channels"].get(self.channel, {})
+            if item["kind"] != "idea" or item["current_version"] or state.get("scheduled_at") or not state.get("selected"):
+                continue
+            try:
+                inputs = json.loads(item["brief"])
+                inputs["urgent_today"] = True
+                if self._prepare_today(item["id"], inputs.get("text") or item["title"], inputs, slot):
+                    return 1
+            except (PultError, ValueError, TypeError):
+                continue
+
+        planner = self.planner or EditorialPlanner(self.root, self.workspace, self.config.get("pipeline_command"))
+        checked = accepted = 0
+        planner_failed = False
+        try:
+            candidates, evidence, errors = planner.propose([slot], self.store.topic_history())
+            checked, accepted = getattr(planner, "last_review_counts", (len(candidates), len(candidates)))
+            print(f"Today planner candidates: received={checked}, passed={accepted}", file=sys.stderr)
+            for candidate in candidates:
+                inputs = candidate_inputs(candidate, evidence)
+                inputs["urgent_today"] = True
+                item_id = self.store.create("post", candidate["topic"], json.dumps(inputs, ensure_ascii=False), (self.channel,))
+                if self._prepare_today(item_id, inputs["text"], inputs, slot):
+                    return 1
+            if errors:
+                print("Today planner source warning: " + ", ".join(errors[:5]), file=sys.stderr)
+        except Exception as error:
+            planner_failed = True
+            print(f"Today planner failed: {type(error).__name__}", file=sys.stderr)
+        self.safe_say(f"Основной слот сегодня, {clock} МСК, остался свободным "
+                      f"после проверки готовых материалов, черновиков и тем: рассмотрено {checked}, "
+                      f"прошло отбор {accepted}. "
+                      f"{'Проверка тем завершилась ошибкой' if planner_failed else 'Качественный пост не подготовлен'}; "
+                      "без «Принято» публикации нет.")
+        return 0
+
+    def _prepare_today(self, item_id, instruction, inputs, slot):
+        self.store.set_schedule(item_id, self.channel, slot)
+        self.store.enqueue(item_id, instruction, inputs)
+        self.process_one_job()
+        item = self.store.get(item_id)
+        if item["current_version"] and item["status"] == "ready":
+            return True
+        with self.store.connect() as db:
+            pending = db.execute("SELECT 1 FROM jobs WHERE item_id=? AND status IN ('queued','running')", (item_id,)).fetchone()
+        if pending:
+            return True  # another queued job won the race; this one remains scheduled
+        self.store.set_schedule(item_id, self.channel, None)
+        return False
 
     @staticmethod
     def permanent_keyboard():
@@ -562,6 +696,7 @@ class Pult:
         if not job:
             return False
         item_id = job["item_id"]
+        inputs = {}
         try:
             item = self.store.get(item_id)
             previous = self.store.version(item_id) if item["current_version"] else None
@@ -602,7 +737,10 @@ class Pult:
                 pass
         except Exception as error:
             self.store.finish_job(job["id"], str(error)[:300])
-            self.safe_say(f"№{item_id}: подготовка остановлена. {str(error)[:250]}")
+            if inputs.get("urgent_today"):
+                print(f"Today preparation failed for №{item_id}: {type(error).__name__}", file=sys.stderr)
+            else:
+                self.safe_say(f"№{item_id}: подготовка остановлена. {str(error)[:250]}")
         return True
 
     def handle_update(self, update):
