@@ -93,6 +93,27 @@ class ScheduleTests(unittest.TestCase):
         self.assertIn("Ср 14.10", full)
         self.assertNotIn("Ср 21.10", full)
 
+    def test_slot_variant_and_search_status(self):
+        slot = stamp(7, 13)
+        self.store.set_kv(f"autoplan_today_rejected:{slot}", json.dumps([8, 9]))
+        self.store.set_kv(f"autoplan_today_state:{slot}", "searching")
+        full = "\n".join(schedule_messages(self.store, SCHEDULE, self.config["smk_satire"], now=NOW))
+        self.assertIn("13:00 | Основной контент\nИДЁТ ПОДБОР", full)
+        self.store.set_kv(f"autoplan_today_state:{slot}", "not_found")
+        full = "\n".join(schedule_messages(self.store, SCHEDULE, self.config["smk_satire"], now=NOW))
+        self.assertIn("МАТЕРИАЛ НЕ НАЙДЕН", full)
+        item_id = self.add_post("Проверка результата", slot, "ready")
+        full = "\n".join(schedule_messages(self.store, SCHEDULE, self.config["smk_satire"], now=NOW))
+        self.assertIn("Вариант 3\n«Проверка результата»\nОжидает согласования", full)
+        self.assertNotIn("МАТЕРИАЛ НЕ НАЙДЕН", full)
+        with self.store.connect() as db:
+            db.execute("UPDATE items SET current_version=2 WHERE id=?", (item_id,))
+            db.execute("UPDATE item_channels SET status='approved' WHERE item_id=?", (item_id,))
+        full = "\n".join(schedule_messages(self.store, SCHEDULE, self.config["smk_satire"], now=NOW))
+        self.assertIn("Вариант 3 · версия 2", full)
+        self.assertIn("Согласовано", full)
+        self.assertEqual(self.store.get(item_id)["id"], item_id)
+
     def test_enabled_satire_uses_existing_table_and_status(self):
         (self.root / "content").mkdir()
         shutil.copyfile(Path(__file__).resolve().parent / "content/smk_satire_bank.json",

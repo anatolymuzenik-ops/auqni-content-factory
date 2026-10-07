@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, time, timedelta
+import json
 
 from pult_core import iso_utc, moscow_zone, utc_now
 
@@ -10,12 +11,19 @@ from pult_core import iso_utc, moscow_zone, utc_now
 WEEKDAYS = ("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс")
 STATUS = {
     "idea": "Идея", "needs_material": "Нужен материал",
-    "preparing": "Готовится", "ready": "Готово, ждёт «Принято»",
+    "preparing": "Готовится", "ready": "Ожидает согласования",
     "approved": "Согласовано", "publishing": "Отправляется",
     "uncertain": "Отправка требует проверки", "published": "Опубликовано",
     "scheduled": "Запланировано",
 }
 MAX_MESSAGE = 3500
+
+
+def main_variant(store, slot, item_id, version=1):
+    """Owner-facing candidate number; item ID and revision remain independent."""
+    rejected = json.loads(store.get_kv(f"autoplan_today_rejected:{slot}") or "[]") if slot else []
+    number = rejected.index(item_id) + 1 if item_id in rejected else len(rejected) + 1
+    return f"Вариант {number}" + (f" · версия {version}" if version and version > 1 else "")
 
 
 def _label(value):
@@ -47,7 +55,7 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
     end_utc = iso_utc(datetime.combine(end, time.min, moscow_zone()))
     satire_on = satire_settings.get("enabled", False)
     with store.connect() as db:
-        main_rows = [dict(row) for row in db.execute("""SELECT i.id,i.title,c.status,c.scheduled_at
+        main_rows = [dict(row) for row in db.execute("""SELECT i.id,i.title,i.current_version,c.status,c.scheduled_at
             FROM items i JOIN item_channels c ON c.item_id=i.id
             WHERE c.channel='telegram' AND c.selected=1 AND c.status!='rejected'
               AND c.scheduled_at>=? AND c.scheduled_at<? ORDER BY c.scheduled_at,i.id""",
@@ -82,15 +90,21 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
                 main_busy += 1
                 if not free_only:
                     for row in rows:
-                        entries.append((expected_main, f"{expected_main} | Основной контент · №{row['id']}\n"
+                        entries.append((expected_main, f"{expected_main} | Основной контент\n"
+                                        f"{main_variant(store, canonical_main, row['id'], row['current_version'])}\n"
                                         f"«{_label(row['title'])}»\n{STATUS.get(row['status'], row['status'])}"))
             elif slot > local_now:
                 main_free += 1
-                entries.append((expected_main, f"{expected_main} | Основной контент\nСВОБОДНЫЙ СЛОТ"))
+                progress = store.get_kv(f"autoplan_today_state:{canonical_main}")
+                label = {"searching": "ИДЁТ ПОДБОР", "not_found": "МАТЕРИАЛ НЕ НАЙДЕН"}.get(
+                    progress, "СВОБОДНЫЙ СЛОТ")
+                entries.append((expected_main, f"{expected_main} | Основной контент\n{label}"))
             else:
                 main_passed += 1
                 if not free_only:
-                    entries.append((expected_main, f"{expected_main} | Основной контент\nВремя слота прошло"))
+                    progress = store.get_kv(f"autoplan_today_state:{canonical_main}")
+                    label = "МАТЕРИАЛ НЕ НАЙДЕН" if progress == "not_found" else "Время слота прошло"
+                    entries.append((expected_main, f"{expected_main} | Основной контент\n{label}"))
         if expected_satire:
             hour, minute = map(int, expected_satire.split(":"))
             slot = datetime.combine(day, time(hour, minute), moscow_zone())
@@ -121,7 +135,8 @@ def schedule_messages(store, main_schedule, satire_settings, days=7, free_only=F
                 if slot.date() == day:
                     for row in main_at.pop(stamp):
                         clock = slot.strftime("%H:%M")
-                        entries.append((clock, f"{clock} | Основной контент · №{row['id']} (вне регулярного слота)\n"
+                        entries.append((clock, f"{clock} | Основной контент (вне регулярного слота)\n"
+                                               f"{main_variant(store, stamp, row['id'], row['current_version'])}\n"
                                                f"«{_label(row['title'])}»\n{STATUS.get(row['status'], row['status'])}"))
             for stamp in list(satire_at):
                 slot = datetime.fromisoformat(stamp).astimezone(moscow_zone())

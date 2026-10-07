@@ -146,7 +146,7 @@ class PultTests(unittest.TestCase):
         self.assertEqual(published["channels"]["telegram"]["external_id"], "812")
         self.assertEqual(published["channels"]["telegram"]["public_url"], "https://t.me/auqni_qms/812")
         notice = self.api.calls[-1][1]["text"]
-        self.assertIn("№1 v1", notice)
+        self.assertIn("Вариант 1 опубликован · ID: 1", notice)
         self.assertIn("Статус: опубликовано", notice)
         self.assertIn("Дата:", notice)
         self.assertIn("https://t.me/auqni_qms/812", notice)

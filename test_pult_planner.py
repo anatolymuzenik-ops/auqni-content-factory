@@ -109,12 +109,17 @@ class TodaySlotTests(unittest.TestCase):
         self.three_candidates()
         self.store.set_kv("autoplan_last_attempt", "2026-10-07")
         self.assertEqual(self.pult.plan_today(TODAY), 1)
+        self.assertIn("Вариант 1", [fields["caption"] for method, fields, _ in self.api.calls
+                                     if method == "sendPhoto"][-1])
         for rejected_id, next_id in ((1, 2), (2, 3)):
             self.callback("reject", rejected_id)
+            self.assertIn(f"Вариант {rejected_id} отклонён", self.api.calls[-1][1]["text"])
             self.assertEqual(self.store.get(rejected_id)["status"], "rejected")
             self.assertIsNone(self.store.get(rejected_id)["channels"]["telegram"]["scheduled_at"])
             self.assertEqual(self.pult.plan_autonomously(TODAY), 1)
             self.assertEqual(self.store.get(next_id)["channels"]["telegram"]["scheduled_at"], self.slot())
+            self.assertIn(f"Вариант {next_id}", [fields["caption"] for method, fields, _ in self.api.calls
+                                              if method == "sendPhoto"][-1])
         self.callback("reject", 3)
         self.assertEqual(self.pult.plan_autonomously(TODAY), 0)
         self.assertEqual(json.loads(self.store.get_kv(f"autoplan_today_rejected:{self.slot()}")), [1, 2, 3])
@@ -131,11 +136,26 @@ class TodaySlotTests(unittest.TestCase):
         self.assertEqual(self.pult.plan_today(TODAY), 1)
         with patch("pult_store.utc_now", return_value=TODAY):
             self.callback("approve", 2)
+        self.assertIn("Вариант 2 принят. Слот", self.api.calls[-1][1]["text"])
         self.assertEqual(self.pult.plan_today(TODAY), 0)
         self.assertEqual(len(self.store.topic_history()), 2)
         self.assertEqual(self.store.get(2)["channels"]["telegram"]["status"], "approved")
         self.pult.tick(TODAY)
         self.assertFalse(self.publisher.sent)
+
+    def test_revision_changes_version_without_changing_variant(self):
+        self.three_candidates()
+        for item_id in (1, 2, 3):
+            self.assertEqual(self.pult.plan_today(TODAY), 1)
+            if item_id < 3:
+                self.callback("reject", item_id)
+        self.store.start_edit(3, 1)
+        self.store.enqueue(3, "Уточни текст", {"text": "Уточни текст"})
+        self.assertTrue(self.pult.process_one_job())
+        caption = [fields["caption"] for method, fields, _ in self.api.calls if method == "sendPhoto"][-1]
+        self.assertIn("Вариант 3 · версия 2", caption)
+        self.assertNotIn("v1", caption)
+        self.assertEqual(self.store.get(3)["current_version"], 2)
 
     def test_reject_limit_bounds_retry(self):
         self.three_candidates()

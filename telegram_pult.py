@@ -27,7 +27,7 @@ from pult_core import (PultError, Pipeline, iso_utc, moscow_zone,
                        snapshot_version, utc_now, validate_content)
 from pult_store import Store
 from pult_satire import SatireStream, review_label
-from pult_schedule import schedule_messages
+from pult_schedule import main_variant, schedule_messages
 from telegram_channel import TelegramPublisher
 
 
@@ -215,8 +215,10 @@ class Pult:
         if self.store.get_kv(key):
             return 0
         self.store.set_kv(key, slot)  # one exhaustive attempt, even across worker restarts
+        self.store.set_kv(f"autoplan_today_state:{slot}", "searching")
         rejected = json.loads(self.store.get_kv(f"autoplan_today_rejected:{slot}") or "[]")
         if len(rejected) >= self.MAX_TODAY_REJECTIONS:
+            self.store.set_kv(f"autoplan_today_state:{slot}", "not_found")
             self.safe_say(f"Основной слот сегодня, {clock} МСК, остался свободным: "
                           f"отклонены {len(rejected)} кандидатов для этого слота. "
                           "Без «Принято» публикации нет.")
@@ -332,6 +334,7 @@ class Pult:
                       f"прошло отбор {accepted}. "
                       f"{'Проверка тем завершилась ошибкой' if planner_failed else 'Качественный пост не подготовлен'}; "
                       "без «Принято» публикации нет.")
+        self.store.set_kv(f"autoplan_today_state:{slot}", "not_found")
         return 0
 
     def _prepare_today(self, item_id, instruction, inputs, slot):
@@ -389,12 +392,21 @@ class Pult:
             raise PultError("Для Telegram нет готового текста или PNG")
         caption = material["text"]
         image = Path(material["media_path"]).read_bytes()
-        heading = f"Публикация №{item_id} · v{shown_version}\nПлан: {local_label(state['scheduled_at'])}"
+        slot = state["scheduled_at"]
+        candidate = main_variant(self.store, slot, item_id, shown_version)
+        visible_status = {"published": "опубликовано", "uncertain": "требует проверки",
+                          "rejected": "отклонено", "preparing": "готовится"}.get(
+                              state["status"], "согласовано" if state["approved_version"] == shown_version
+                              else "ожидает согласования")
+        heading = (f"Основной контент\nСлот: {local_label(slot)}\n{candidate}\n"
+                   f"Статус: {visible_status}\n"
+                   f"ID: {item_id}" if slot else
+                   f"Материал · ID: {item_id}" + (f" · версия {shown_version}" if shown_version > 1 else ""))
         self.api.call("sendPhoto", {"chat_id": self.owner_id, "caption": heading},
                       {"photo": ("image.png", image, "image/png")})
         v = shown_version
         if state["status"] == "published":
-            self.say(caption + f"\n\nОпубликовано · №{item_id} v{v}\n"
+            self.say(caption + f"\n\n{candidate} опубликован · ID: {item_id}\n"
                      f"Дата: {local_label(state['published_at'])}\n"
                      f"Статус: опубликовано\nСсылка: {state['public_url']}",
                      [[("Открыть публикацию", state["public_url"])]])
@@ -432,7 +444,9 @@ class Pult:
         for row in scheduled[:10]:
             parts = [f"{name}: {local_label(c['scheduled_at'])} / {'принято' if c['approved_version'] == row['current_version'] and row['current_version'] else c['status']}"
                      for name, c in row["channels"].items() if c["selected"] and c["scheduled_at"]]
-            lines.append(f"№{row['id']} · v{row['current_version']} · {', '.join(parts)} · {row['title'][:70]}")
+            slot = row["channels"].get(self.channel, {}).get("scheduled_at")
+            label = main_variant(self.store, slot, row["id"], row["current_version"]) if slot else f"ID: {row['id']}"
+            lines.append(f"{label} · ID: {row['id']} · {', '.join(parts)} · {row['title'][:70]}")
         if not scheduled:
             lines.append("Пока пусто")
         lines.append("\nБанк идей:")
@@ -619,7 +633,9 @@ class Pult:
             raise PultError("Кнопка относится к старой версии")
         if action == "approve":
             self.store.approve(item_id, version, self.channel)
-            self.say(f"Принято · №{item_id} v{version} · Telegram. Публикация: {local_label(item['channels'][self.channel]['scheduled_at'])}.")
+            slot = item["channels"][self.channel]["scheduled_at"]
+            candidate = main_variant(self.store, slot, item_id, version)
+            self.say(f"{candidate} принят. Слот {local_label(slot)} заполнен. ID: {item_id}.")
         elif action == "publish":
             self.publish_item(item_id, version, scheduled=False)
         elif action == "edit":
@@ -630,6 +646,7 @@ class Pult:
             self.say(f"№{item_id} оставлен в контент-плане без статуса «Принято».")
         elif action == "reject":
             scheduled = item["channels"][self.channel]["scheduled_at"]
+            candidate = main_variant(self.store, scheduled, item_id, version) if scheduled else f"Материал ID: {item_id}"
             now = utc_now()
             local = now.astimezone(moscow_zone())
             clock = self.schedule.get(str(local.weekday()))
@@ -637,8 +654,8 @@ class Pult:
                                            tzinfo=moscow_zone())) if clock else None)
             retry_slot = scheduled if scheduled == today_slot and scheduled > iso_utc(now) else None
             self.store.reject(item_id, self.channel, retry_slot=retry_slot)
-            self.say(f"№{item_id} отклонён." +
-                     (" Подбираю следующий материал для свободного слота." if retry_slot else ""))
+            self.say(f"{candidate} отклонён." +
+                     (f" Подбираю следующий материал для слота {local_label(retry_slot)}." if retry_slot else ""))
 
     def publish_item(self, item_id, version, scheduled, now=None, channel="telegram"):
         publisher = self.publishers.get(channel)
@@ -668,7 +685,9 @@ class Pult:
             return False
         self.store.publication_result(item_id, channel, "published", message_id, url)
         published_at = self.store.get(item_id)["channels"][channel]["published_at"]
-        self.safe_say(f"Опубликовано · №{item_id} v{version}\n«{title}»\n"
+        slot = self.store.get(item_id)["channels"][channel]["scheduled_at"]
+        candidate = main_variant(self.store, slot, item_id, version) if channel == self.channel else f"ID: {item_id}"
+        self.safe_say(f"{candidate} опубликован · ID: {item_id}\n«{title}»\n"
                       f"Дата: {local_label(published_at)}\nСтатус: опубликовано\nСсылка: {url}",
                       [[("Открыть публикацию", url)]])
         return True
