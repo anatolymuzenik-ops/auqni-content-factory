@@ -58,6 +58,13 @@
 /visual-references/**
 !/visual-references/brand/
 !/visual-references/brand/*.png
+!/visual-tests/
+/visual-tests/**
+!/visual-tests/smk-satire-chaos/
+!/visual-tests/smk-satire-chaos/03-character.png
+!/visual-tests/smk-satire-chaos/04-kpi.png
+!/visual-tests/smk-satire-chaos/05-process.png
+!/visual-tests/smk-satire-chaos/06-audit.png
 
 !/examples/
 /examples/**

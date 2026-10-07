@@ -1,12 +1,15 @@
 import json
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
+import struct
 import tempfile
 import unittest
 from unittest.mock import patch
+import zlib
 
 from pult_core import PultError
-from pult_satire import SatireStream, read_bank, validate_candidate
+from pult_satire import SatireStream, read_bank, validate_candidate, reuse_visual, visual_file
 from pult_store import Store
 from telegram_pult import Pult
 
@@ -14,16 +17,62 @@ from telegram_pult import Pult
 ROOT = Path(__file__).resolve().parent
 
 
+def sample_visual(root, name="sample.png"):
+    target = Path(root) / "images/smk_satire" / name
+    target.parent.mkdir(parents=True, exist_ok=True)
+    def chunk(kind, body):
+        return struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+    scan = (b"\x00" + b"\xff\xff\xff" * 1254) * 1254
+    target.write_bytes(b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", struct.pack(">IIBBBBB", 1254, 1254, 8, 2, 0, 0, 0))
+                       + chunk(b"IDAT", zlib.compress(scan)) + chunk(b"IEND", b""))
+    path, digest = visual_file(target, root)
+    return {"image_path": path, "image_sha256": digest, "visual_role": "тестовый персонаж",
+            "visual_prompt": "тестовая сцена"}
+
+
+def prepare_bank_visual(stream, post_id, root):
+    job, _ = stream.claim_visual()
+    assert job["post_id"] == post_id
+    stream.finish_visual(post_id, job["version"], sample_visual(root, post_id + ".png"))
+
+
 class SatireTests(unittest.TestCase):
+    def test_visual_is_required_and_old_approval_is_revoked(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
+                                  ROOT / "content/smk_satire_bank.json", {"time": "08:30"}, temp)
+            stream.seed()
+            before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
+            post_id = stream.plan(before)[0][0]
+            with self.assertRaises(PultError):
+                stream.approve(post_id, before)
+            with stream.store.connect() as db:
+                db.execute("UPDATE satire_posts SET status='approved' WHERE id=?", (post_id,))
+            self.assertEqual(stream.recover_visuals(), [post_id])
+            self.assertEqual(stream.get(post_id)["status"], "scheduled")
+            self.assertFalse(stream.due(datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)))
+            prepare_bank_visual(stream, post_id, temp)
+            stream.approve(post_id, before)
+            self.assertTrue(stream.due(datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)))
+
+    def test_visual_reuse_only_for_small_same_topic_edits(self):
+        old = {"text": "Показатель достигнут. Теперь предстоит выяснить, что он показывал.",
+               "genre": "СМК-News", "topic": "Показатели", "image_path": "/some/image.png"}
+        self.assertTrue(reuse_visual(old, {"text": old["text"] + "!", "genre": "СМК-News", "topic": "Показатели"}))
+        self.assertFalse(reuse_visual(old, {"text": "На аудите нашли новый процесс, которого раньше никто не видел.",
+                                            "genre": "СМК-News", "topic": "Аудит"}))
+
     def test_bank_edit_keeps_versions_and_revokes_approval(self):
         with tempfile.TemporaryDirectory() as temp:
             stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
                                   ROOT / "content/smk_satire_bank.json",
                                   {"time": "08:30", "weekdays": [0, 1, 2, 3, 4], "horizon_days": 1})
             stream.seed()
+            stream.root = Path(temp)
             before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
             post_id = stream.plan(before)[0][0]
             original = stream.get(post_id)["text"]
+            prepare_bank_visual(stream, post_id, temp)
             stream.approve(post_id, before, version=1)
             stream.begin_edit(post_id, 1)
             submission_id = stream.queue_edit(post_id, 1, "Сделай финал о четвёртом согласовании")
@@ -35,7 +84,7 @@ class SatireTests(unittest.TestCase):
             candidate = {"text": "Согласовали сокращение маршрута документа. Теперь четыре подписи ставят в одной комнате.",
                          "genre": "СМК-News", "topic": "Согласование", "mix_type": stream.get(post_id)["mix_type"],
                          "product_context": None}
-            stream.finish_submission(submission, candidate)
+            stream.finish_submission(submission, candidate, sample_visual(temp, "edit-2.png"))
             self.assertEqual(stream.version(post_id, 1)["text"], original)
             self.assertEqual(stream.version(post_id, 2)["text"], candidate["text"])
             self.assertEqual(stream.get(post_id)["current_version"], 2)
@@ -50,7 +99,7 @@ class SatireTests(unittest.TestCase):
                 second = dict(db.execute("SELECT * FROM satire_submissions WHERE id=?", (second_id,)).fetchone())
             stream.claim_submission()
             next_candidate = {**candidate, "text": "Маршрут согласования сократили. Подписи остались те же — теперь все четыре ставят в одной комнате."}
-            stream.finish_submission(second, next_candidate)
+            stream.finish_submission(second, next_candidate, sample_visual(temp, "edit-3.png"))
             self.assertEqual(stream.get(post_id)["current_version"], 3)
             self.assertEqual(stream.version(post_id, 2)["text"], candidate["text"])
             self.assertEqual(stream.version(post_id, 3)["text"], next_candidate["text"])
@@ -60,7 +109,7 @@ class SatireTests(unittest.TestCase):
             def __init__(self):
                 self.calls = []
 
-            def call(self, method, payload):
+            def call(self, method, payload, files=None):
                 self.calls.append((method, payload))
                 return {"message_id": 1}
 
@@ -71,13 +120,22 @@ class SatireTests(unittest.TestCase):
                         "genre": "управленческий парадокс", "topic": "процессы", "mix_type": "soft",
                         "product_context": "сбор болей и продуктовых идей"}
 
+        class Generator:
+            def __init__(self, root):
+                self.root = root
+                self.calls = 0
+
+            def run(self, candidate, role):
+                self.calls += 1
+                return sample_visual(self.root, f"idea-{self.calls}.png")
+
         with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {"AUQNI_OWNER_USER_ID": "123"}):
             root = Path(temp)
             (root / "content").mkdir()
             (root / "content/smk_satire_bank.json").write_bytes((ROOT / "content/smk_satire_bank.json").read_bytes())
             config = json.loads((ROOT / "pult_config.json").read_text())
             api = API()
-            pult = Pult(root, config, api, satire_writer=Writer())
+            pult = Pult(root, config, api, satire_writer=Writer(), satire_image_generator=Generator(root))
             pult.handle_message({"from": {"id": 123}, "chat": {"id": 123, "type": "private"}, "text": "Создать пост"})
             pult.handle_message({"from": {"id": 123}, "chat": {"id": 123, "type": "private"},
                                  "text": "Хаос — это такой порядок"})
@@ -94,10 +152,15 @@ class SatireTests(unittest.TestCase):
             self.assertIsNone(post["scheduled_at"])
             self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
             self.assertEqual(pult.satire.version(post["id"], 1)["source"], "user")
-            buttons = api.calls[-1][1]["reply_markup"]["inline_keyboard"][0]
+            self.assertEqual(api.calls[-1][0], "sendPhoto")
+            buttons = json.loads(api.calls[-1][1]["reply_markup"])["inline_keyboard"][0]
             self.assertEqual([b["text"] for b in buttons], ["Принято", "Изменить", "Отклонить"])
+            approve_callback = buttons[0]["callback_data"]
+            with self.assertRaises(PultError):
+                pult.handle_callback({"id": "old", "from": {"id": 123}, "message": {"chat": {"id": 123}},
+                                      "data": f"satire:approve:{post['id']}:1"})
             pult.handle_callback({"id": "cb2", "from": {"id": 123}, "message": {"chat": {"id": 123}},
-                                  "data": f"satire:approve:{post['id']}:1"})
+                                  "data": approve_callback})
             approved = pult.satire.get(post["id"])
             self.assertEqual(approved["status"], "approved")
             self.assertIsNotNone(approved["scheduled_at"])
@@ -117,6 +180,45 @@ class SatireTests(unittest.TestCase):
                                   "data": f"satire:cancel:{post['id']}:1"})
             self.assertEqual(pult.satire.get(post["id"])["status"], "scheduled")
 
+    def test_substantive_edit_creates_new_text_and_image_version(self):
+        class API:
+            def call(self, method, payload, files=None):
+                return {"message_id": 1}
+
+        class Writer:
+            def run(self, *args, **kwargs):
+                return {"text": "На аудите обнаружили процесс, о существовании которого сотрудники узнали из отчёта.",
+                        "genre": "СМК-News", "topic": "Аудит", "mix_type": "pure", "product_context": None}
+
+        class Generator:
+            def __init__(self, root):
+                self.root = root
+                self.calls = 0
+
+            def run(self, candidate, role):
+                self.calls += 1
+                return sample_visual(self.root, f"version-{self.calls}.png")
+
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {"AUQNI_OWNER_USER_ID": "123"}):
+            root = Path(temp)
+            (root / "content").mkdir()
+            (root / "content/smk_satire_bank.json").write_bytes((ROOT / "content/smk_satire_bank.json").read_bytes())
+            generator = Generator(root)
+            pult = Pult(root, json.loads((ROOT / "pult_config.json").read_text()), API(),
+                        satire_writer=Writer(), satire_image_generator=generator)
+            post_id = pult.satire.plan(datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc))[0][0]
+            self.assertTrue(pult.process_one_satire_visual())
+            old_image = pult.satire.version(post_id, 1)["image_path"]
+            pult.satire.begin_edit(post_id, 1)
+            pult.satire.queue_edit(post_id, 1, "Сделай новую сцену про аудит")
+            self.assertTrue(pult.process_one_satire_submission())
+            new = pult.satire.version(post_id, 2)
+            self.assertEqual(generator.calls, 2)
+            self.assertNotEqual(new["image_path"], old_image)
+            self.assertEqual(new["visual_source_version"], 2)
+            self.assertEqual(pult.satire.version(post_id, 1)["image_path"], old_image)
+            self.assertEqual(pult.satire.get(post_id)["status"], "scheduled")
+
     def test_generated_candidate_must_be_short_and_typed(self):
         with self.assertRaises(PultError):
             validate_candidate({"text": "Слишком коротко", "genre": "новость", "topic": "СМК", "mix_type": "pure"})
@@ -127,6 +229,7 @@ class SatireTests(unittest.TestCase):
                                   ROOT / "content/smk_satire_bank.json",
                                   {"time": "08:30", "horizon_days": 1})
             stream.seed()
+            stream.root = Path(temp)
             post_id = stream.plan(datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc))[0][0]
             stream.begin_edit(post_id, 1)
             submission_id = stream.queue_edit(post_id, 1, "Сделай короче")
@@ -147,6 +250,7 @@ class SatireTests(unittest.TestCase):
                                   ROOT / "content/smk_satire_bank.json",
                                   {"time": "08:30", "horizon_days": 13})
             stream.seed()
+            stream.root = Path(temp)
             now = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
             planned = stream.plan(now)
             self.assertEqual(len(planned), 10)
@@ -158,6 +262,7 @@ class SatireTests(unittest.TestCase):
             self.assertEqual([stream.get(post_id)["mix_type"] for post_id, _, _ in planned],
                              ["pure", "problem", "pure", "soft", "pure", "problem", "pure", "soft", "pure", "problem"])
             self.assertFalse(stream.due(now))
+            prepare_bank_visual(stream, planned[0][0], temp)
             stream.approve(planned[0][0], now)
             self.assertEqual(len(stream.due(datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc))), 1)
             self.assertTrue(stream.claim(planned[0][0], datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)))
@@ -179,6 +284,7 @@ class SatireTests(unittest.TestCase):
                                   ROOT / "content/smk_satire_bank.json",
                                   {**config["smk_satire"], "horizon_days": 29})
             stream.seed()
+            stream.root = Path(temp)
             planned = stream.plan(datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc))
             self.assertGreaterEqual(len(planned), 20)
             planned = planned[:20]
@@ -194,8 +300,10 @@ class SatireTests(unittest.TestCase):
                                   ROOT / "content/smk_satire_bank.json",
                                   {"time": "08:30", "horizon_days": 1})
             stream.seed()
+            stream.root = Path(temp)
             before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
             post_id = stream.plan(before)[0][0]
+            prepare_bank_visual(stream, post_id, temp)
             stream.approve(post_id, before)
             self.assertTrue(stream.claim(post_id, datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)))
             stream.result(post_id, 42)
@@ -210,12 +318,12 @@ class SatireTests(unittest.TestCase):
             self.assertFalse(stream.record_reaction_count({**update, "message_id": 43}))
             self.assertEqual(json.loads(stream.get(post_id)["reactions_json"]), saved)
 
-    def test_pult_sends_text_only_after_owner_approval(self):
+    def test_pult_sends_text_and_image_only_after_owner_approval(self):
         class API:
             def __init__(self):
                 self.calls = []
 
-            def call(self, method, payload):
+            def call(self, method, payload, files=None):
                 self.calls.append((method, payload))
                 if payload.get("chat_id") == "@auqni_qms":
                     return {"message_id": 42, "chat": {"username": "auqni_qms"}}
@@ -234,12 +342,14 @@ class SatireTests(unittest.TestCase):
             due = datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)
             pult.tick(before)
             post_id = "SMK-007"
+            pult.satire_image_generator = type("Generator", (), {"run": lambda self, row, role: sample_visual(root, "bank.png")})()
+            self.assertTrue(pult.process_one_satire_visual())
             self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
             pult.satire.approve(post_id, before)
             pult.tick(due)
             sent = [(method, payload) for method, payload in api.calls if payload.get("chat_id") == "@auqni_qms"]
             self.assertEqual(len(sent), 1)
-            self.assertEqual(sent[0][0], "sendMessage")
+            self.assertEqual(sent[0][0], "sendPhoto")
             self.assertEqual(pult.satire.get(post_id)["status"], "published")
             pult.tick(due)
             self.assertEqual(sum(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls), 1)

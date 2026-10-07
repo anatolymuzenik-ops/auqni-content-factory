@@ -27,7 +27,7 @@ from pult_core import (PultError, Pipeline, iso_utc, moscow_zone,
                        local_label, next_slot, parse_local_time,
                        snapshot_version, utc_now, validate_content)
 from pult_store import Store
-from pult_satire import SatireStream, SatireWriter, review_label
+from pult_satire import SatireStream, SatireWriter, SatireImageGenerator, reuse_visual, review_label
 from pult_schedule import main_variant, schedule_messages
 from telegram_channel import TelegramPublisher
 
@@ -119,7 +119,7 @@ class Pult:
     MAX_TODAY_REJECTIONS = 6
 
     def __init__(self, root, config, api, store=None, pipeline=None, publisher=None, planner=None,
-                 satire_writer=None):
+                 satire_writer=None, satire_image_generator=None):
         self.root = Path(root).resolve()
         self.workspace = self.root.parent.parent.resolve()
         self.config = config
@@ -140,12 +140,14 @@ class Pult:
         self.transcription_model = config.get("transcription_model", "gpt-4o-mini-transcribe")
         self.planner = planner
         satire_settings = config.get("smk_satire", {})
-        self.satire = (SatireStream(self.store, self.root / "content/smk_satire_bank.json", satire_settings)
+        self.satire = (SatireStream(self.store, self.root / "content/smk_satire_bank.json", satire_settings, self.root)
                        if satire_settings.get("enabled") else None)
         if self.satire:
             self.satire.seed()
         self.satire_writer = (satire_writer or SatireWriter(self.root, self.workspace, self.data,
                               config.get("pipeline_command"))) if self.satire else None
+        self.satire_image_generator = (satire_image_generator or SatireImageGenerator(
+            self.root, self.workspace, self.data, config.get("pipeline_command"))) if self.satire else None
 
     def plan_autonomously(self, now=None):
         """Fill free configured slots with unapproved drafts through the existing queue."""
@@ -386,12 +388,43 @@ class Pult:
         if not row or row["status"] not in ("scheduled", "draft", "approved"):
             raise PultError("SMK_SATIRE не ждёт согласования")
         version = row["current_version"]
-        buttons = [] if row["status"] == "approved" else [("Принято", f"satire:approve:{post_id}:{version}")]
+        image_path = self.satire.require_visual(post_id, version)
+        visual_token = self.satire.version(post_id, version)["image_sha256"][:12]
+        buttons = [] if row["status"] == "approved" else [("Принято", f"satire:approve:{post_id}:{version}:{visual_token}")]
         buttons.extend([("Изменить", f"satire:edit:{post_id}:{version}"),
                         ("Отклонить", f"satire:reject:{post_id}:{version}")])
         status = "Согласовано" if row["status"] == "approved" else "Ожидает согласования"
-        self.say(review_label(post_id, row["text"], row["scheduled_at"], version) + f"\n\n{status}",
-                 [buttons])
+        image = Path(image_path).read_bytes()
+        caption = review_label(post_id, row["text"], row["scheduled_at"], version) + f"\n\n{status}"
+        if len(caption) <= 1024:
+            self.api.call("sendPhoto", {"chat_id": self.owner_id, "caption": caption,
+                                      "reply_markup": json.dumps(self.inline([buttons]), ensure_ascii=False)},
+                          {"photo": ("satire.png", image, "image/png")})
+        else:
+            self.api.call("sendPhoto", {"chat_id": self.owner_id,
+                                      "caption": f"SMK_SATIRE {post_id} · версия {version}"},
+                          {"photo": ("satire.png", image, "image/png")})
+            self.say(caption, [buttons])
+
+    def process_one_satire_visual(self):
+        if not self.satire:
+            return False
+        job = self.satire.claim_visual()
+        if not job:
+            return False
+        row, role = job
+        try:
+            visual = self.satire_image_generator.run(row, role)
+            self.satire.finish_visual(row["post_id"], row["version"], visual)
+            self.show_satire_review(row["post_id"])
+        except Exception as error:
+            self.satire.fail_visual(row["post_id"], row["version"])
+            print(f"SMK_SATIRE visual failed for {row['post_id']}: {type(error).__name__}", file=sys.stderr)
+            if row["visual_attempts"] + 1 >= 3:
+                self.safe_say(f"{row['post_id']}: изображение не удалось подготовить после трёх попыток. "
+                              "Пост не согласован и не будет опубликован.",
+                              [[("Повторить визуал", f"satire:visual_retry:{row['post_id']}:{row['version']}")]])
+        return True
 
     def process_one_satire_submission(self):
         if not self.satire:
@@ -407,7 +440,17 @@ class Pult:
                 submission["text"], previous=old["text"] if old else None,
                 instruction=submission["text"] if old else None,
                 mix_type=old["mix_type"] if old else None)
-            post_id = self.satire.finish_submission(submission, candidate)
+            old_version = self.satire.version(old["id"]) if old else None
+            if reuse_visual(old_version, candidate):
+                self.satire.require_visual(old["id"], old["current_version"])
+                visual = {"image_path": old_version["image_path"],
+                          "image_sha256": old_version["image_sha256"],
+                          "visual_role": old_version["visual_role"],
+                          "visual_prompt": old_version["visual_prompt"],
+                          "visual_source_version": old_version["visual_source_version"] or old["current_version"]}
+            else:
+                visual = self.satire_image_generator.run(candidate, self.satire.next_visual_role())
+            post_id = self.satire.finish_submission(submission, candidate, visual)
         except Exception as error:
             self.satire.fail_submission(submission, error)
             self.safe_say(f"Идею SMK_SATIRE #{submission['id']} пока не удалось подготовить. "
@@ -655,20 +698,28 @@ class Pult:
         if data.startswith("satire:"):
             if not self.satire:
                 raise PultError("Поток SMK_SATIRE выключен")
+            visual_retry = re.fullmatch(r"satire:visual_retry:(SMK-\d{3,}):(\d+)", data)
+            if visual_retry:
+                self.satire.retry_visual(visual_retry.group(1), int(visual_retry.group(2)))
+                self.say("Визуал SMK_SATIRE снова поставлен на подготовку.")
+                return
             retry = re.fullmatch(r"satire:retry:(\d+)", data)
             if retry:
                 self.satire.retry_submission(int(retry.group(1)))
                 self.say("Идея SMK_SATIRE снова поставлена на подготовку.")
                 return
-            match = re.fullmatch(r"satire:(approve|reject|edit|cancel):(SMK-\d{3,})(?::(\d+))?", data)
+            match = re.fullmatch(r"satire:(approve|reject|edit|cancel):(SMK-\d{3,})(?::(\d+))?(?::([0-9a-f]{12}))?", data)
             if not match:
                 raise PultError("Неизвестная кнопка SMK_SATIRE")
-            action, post_id, raw_version = match.groups()
+            action, post_id, raw_version, visual_token = match.groups()
             version = int(raw_version) if raw_version else 1  # prior production cards were v1 only
             row = self.satire.get(post_id)
             if not row or row["current_version"] != version:
                 raise PultError("Карточка SMK_SATIRE устарела; откройте последнюю версию")
             if action == "approve":
+                current_visual = self.satire.version(post_id, version)
+                if not visual_token or not current_visual["image_sha256"] or visual_token != current_visual["image_sha256"][:12]:
+                    raise PultError("Карточка без актуального изображения устарела; откройте пост заново")
                 stamp = self.satire.approve(post_id, version=version)
                 self.say(f"{post_id} · версия {version} принята для {local_label(stamp)}.")
             elif action == "edit":
@@ -801,16 +852,19 @@ class Pult:
         return True
 
     def tick_satire(self, now):
-        for post_id, body, stamp in self.satire.plan(now):
-            try:
-                self.show_satire_review(post_id)
-            except PultError:
-                pass
+        self.satire.plan(now)  # The worker sends review after the matching image is ready.
         for row in self.satire.due(now):
+            try:
+                image = Path(self.satire.require_visual(row["id"], row["current_version"])).read_bytes()
+            except PultError:
+                self.satire.invalidate_visual(row["id"], row["current_version"])
+                self.safe_say(f"{row['id']}: изображение недоступно; согласование снято, публикация остановлена.")
+                continue
             if not self.satire.claim(row["id"], now):
                 continue
             try:
-                result = self.api.call("sendMessage", {"chat_id": "@auqni_qms", "text": row["text"]})
+                result = self.api.call("sendPhoto", {"chat_id": "@auqni_qms", "caption": row["text"]},
+                                       {"photo": ("satire.png", image, "image/png")})
                 if (not isinstance(result, dict) or type(result.get("message_id")) is not int
                         or result.get("chat", {}).get("username") != "auqni_qms"):
                     raise PultError("Telegram не подтвердил адрес и номер публикации")
@@ -917,11 +971,14 @@ class Pult:
         satire_uncertain = self.satire.recover() if self.satire else []
         if self.satire:
             self.satire.recover_submissions()
+            visual_revoked = self.satire.recover_visuals()
+        else:
+            visual_revoked = []
 
         def worker():
             while not stop.is_set():
                 try:
-                    if not self.process_one_job() and not self.process_one_satire_submission():
+                    if not self.process_one_job() and not self.process_one_satire_submission() and not self.process_one_satire_visual():
                         self.plan_autonomously()
                         stop.wait(3)
                 except Exception:
@@ -936,6 +993,9 @@ class Pult:
                           "Статус uncertain; проверьте канал вручную. Автоматического повтора нет.")
         for post_id in satire_uncertain:
             self.safe_say(f"{post_id}: отправка прервалась. Статус uncertain; проверьте канал вручную.")
+        if visual_revoked:
+            self.safe_say("Для ранее согласованных SMK_SATIRE готовятся новые изображения. "
+                          "Прежнее согласование снято; каждый пакет потребуется принять заново.")
         try:
             while True:
                 self.tick()

@@ -109,6 +109,11 @@ class Store:
                                  "source_submission_id": "INTEGER"},
                 "satire_submissions": {"target_post_id": "TEXT", "base_version": "INTEGER",
                                        "result_post_id": "TEXT", "last_error": "TEXT"},
+                "satire_versions": {"image_path": "TEXT", "image_sha256": "TEXT",
+                                    "visual_role": "TEXT", "visual_prompt": "TEXT",
+                                    "visual_source_version": "INTEGER",
+                                    "visual_state": "TEXT", "visual_attempts": "INTEGER NOT NULL DEFAULT 0",
+                                    "visual_last_attempt": "TEXT"},
             }.items():
                 existing = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
                 for name, definition in additions.items():

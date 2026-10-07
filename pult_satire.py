@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from difflib import SequenceMatcher
+import hashlib
 import json
 import os
 from pathlib import Path
 import subprocess
+import struct
 import tempfile
+import uuid
+import zlib
 
 from pult_core import PultError, iso_utc, local_label, moscow_zone, utc_now
 
@@ -16,6 +21,111 @@ MIX = ("pure", "problem", "pure", "soft", "pure",
        "problem", "pure", "soft", "pure", "problem")
 MAKEUP = ("pure", "soft", "pure", "pure", "soft",
           "pure", "soft", "pure", "pure", "soft")
+VISUAL_ROLES = (
+    "женщина, специалист по качеству, деловая одежда, ироничное недоумение",
+    "мужчина, внутренний аудитор среднего возраста, рубашка, удивление",
+    "женщина, врач в медицинском халате, решительная улыбка",
+    "пожилой мужчина, руководитель процесса, деловой костюм, растерянность",
+    "мужчина, медработник в хирургическом костюме, озадаченность",
+    "женщина, молодой координатор СМК, деловая одежда, живое раздражение",
+)
+
+
+def visual_file(path, root):
+    """Accept only a real square PNG in the project image directory."""
+    path = Path(path).resolve()
+    if not path.is_relative_to((Path(root) / "images" / "smk_satire").resolve()):
+        raise PultError("Визуал SMK_SATIRE находится вне каталога проекта")
+    try:
+        body = path.read_bytes()
+        if len(body) > 10 * 1024 * 1024 or body[:8] != b"\x89PNG\r\n\x1a\n":
+            raise ValueError
+        width, height = struct.unpack(">II", body[16:24])
+        if width != height or width < 1000 or width > 2000:
+            raise ValueError
+        offset, seen_idat, seen_end = 8, False, False
+        while offset + 12 <= len(body):
+            length = struct.unpack(">I", body[offset:offset + 4])[0]
+            kind = body[offset + 4:offset + 8]
+            end = offset + 12 + length
+            if end > len(body) or zlib.crc32(body[offset + 4:offset + 8 + length]) != struct.unpack(">I", body[end - 4:end])[0]:
+                raise ValueError
+            seen_idat |= kind == b"IDAT"
+            if kind == b"IEND":
+                seen_end = end == len(body)
+                break
+            offset = end
+        if not seen_idat or not seen_end:
+            raise ValueError
+    except (OSError, ValueError, struct.error):
+        raise PultError("Нужен готовый квадратный PNG SMK_SATIRE") from None
+    return str(path), hashlib.sha256(body).hexdigest()
+
+
+def reuse_visual(old, new):
+    """Conservative: reuse only for small wording edits of the same joke."""
+    if not old or not old.get("image_path") or old["genre"] != new["genre"] or old["topic"] != new["topic"]:
+        return False
+    return SequenceMatcher(None, old["text"].casefold(), new["text"].casefold()).ratio() >= 0.88
+
+
+class SatireImageGenerator:
+    """Use the existing Codex/imagegen command, with the approved style image as reference."""
+
+    def __init__(self, root, workspace, data_dir, command):
+        self.root, self.workspace, self.data_dir = map(lambda x: Path(x).resolve(), (root, workspace, data_dir))
+        self.command = command
+
+    def run(self, candidate, role):
+        if not self.command:
+            raise PultError("Команда генерации изображения SMK_SATIRE не настроена")
+        reference = self.root / "visual-tests/smk-satire-chaos/03-character.png"
+        if not reference.is_file():
+            raise PultError("Не найден утверждённый визуальный референс SMK_SATIRE")
+        target_dir = self.root / "images/smk_satire"
+        target_dir.mkdir(parents=True, exist_ok=True)
+        target = target_dir / f"smk-{uuid.uuid4().hex}.png"
+        with tempfile.TemporaryDirectory(prefix="smk-visual-", dir=self.data_dir) as temp:
+            result = Path(temp) / "result.json"
+            prompt = (
+                "Подготовь РОВНО ОДНУ квадратную PNG-иллюстрацию 1254×1254 для утреннего "
+                "SMK_SATIRE. Используй встроенный image_gen.imagegen согласно skill imagegen. "
+                "Приложенная картинка — ТОЛЬКО стилевой референс: сохрани белый воздушный фон, "
+                "живую иллюстрацию и палитру AUQNI (тёмно-синий, яркий синий, бирюза), "
+                "но создай иную композицию, ситуацию и лицо. Никаких реалистичных фотолюдей. "
+                "Персонаж: " + role + ". Изобрази одну ясную сатирическую метафору конкретного "
+                "поста с чек-листами, интерфейсами, документами или рабочим абсурдом по смыслу. "
+                "Не копируй сцену с перепутанными стрелками. Не добавляй рекламную плашку, "
+                "логотип, метку SMK_SATIRE или полный текст поста. Избегай текста на картинке: "
+                "допустим только один короткий, безошибочный статус, если он усилит шутку. "
+                f"Текст поста: {candidate['text']}\nТема: {candidate['topic']}. "
+                f"Сохрани готовый PNG по абсолютному пути {target}. "
+                "Не меняй другие файлы проекта и ничего не публикуй. "
+                "Последний ответ строго JSON: "
+                '{"status":"ok","local_image_path":"' + str(target) + '","image_prompt":"краткое описание сцены"}'
+            )
+            args = [piece.format(workspace_root=self.workspace, project_root=self.root,
+                                 result_path=result) for piece in self.command]
+            args[args.index("-"):args.index("-")] = ["-i", str(reference)]
+            env = os.environ.copy()
+            for key in ("TELEGRAM_BOT_TOKEN", "AUQNI_OWNER_USER_ID", "OPENAI_API_KEY"):
+                env.pop(key, None)
+            try:
+                proc = subprocess.run(args, input=prompt, text=True, cwd=self.workspace,
+                                      env=env, capture_output=True, timeout=900, check=False)
+            except (OSError, subprocess.TimeoutExpired):
+                raise PultError("Генератор изображения SMK_SATIRE не запустился или превысил время") from None
+            if proc.returncode:
+                raise PultError("Генератор изображения SMK_SATIRE завершился с ошибкой")
+            try:
+                payload = json.loads(result.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                raise PultError("Генератор изображения SMK_SATIRE вернул неверный формат") from None
+            if payload.get("status") != "ok" or payload.get("local_image_path") != str(target):
+                raise PultError("Генератор изображения SMK_SATIRE не создал нужный файл")
+            path, digest = visual_file(target, self.root)
+            return {"image_path": path, "image_sha256": digest,
+                    "visual_role": role, "visual_prompt": str(payload.get("image_prompt", ""))[:1000]}
 
 
 class SatireWriter:
@@ -115,10 +225,105 @@ def read_bank(path):
 
 
 class SatireStream:
-    def __init__(self, store, bank_path, settings):
+    def __init__(self, store, bank_path, settings, root=None):
         self.store = store
         self.bank = read_bank(bank_path)
         self.settings = settings
+        self.root = Path(root or Path(bank_path).resolve().parent.parent).resolve()
+
+    def require_visual(self, post_id, version=None):
+        row = self.version(post_id, version)
+        if not row or not row["image_path"] or not row["image_sha256"]:
+            raise PultError("Изображение SMK_SATIRE ещё не готово; согласование недоступно")
+        path, digest = visual_file(row["image_path"], self.root)
+        if digest != row["image_sha256"]:
+            raise PultError("Изображение SMK_SATIRE изменилось; нужно подготовить его заново")
+        return path
+
+    def recover_visuals(self):
+        """An old text-only approval cannot authorize a newly generated image."""
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            revoked = [row[0] for row in db.execute("""SELECT p.id FROM satire_posts p
+                JOIN satire_versions v ON v.post_id=p.id AND v.version=p.current_version
+                WHERE p.status='approved' AND v.image_path IS NULL""")]
+            db.execute("""UPDATE satire_posts SET status='scheduled' WHERE id IN (
+                SELECT p.id FROM satire_posts p JOIN satire_versions v
+                ON v.post_id=p.id AND v.version=p.current_version
+                WHERE p.status='approved' AND v.image_path IS NULL)""")
+            db.execute("UPDATE satire_versions SET visual_state='failed' WHERE visual_state='preparing'")
+            return revoked
+
+    def claim_visual(self, now=None):
+        now = now or utc_now()
+        retry_before = iso_utc(now - timedelta(minutes=10))
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("""SELECT v.*,p.status,p.scheduled_at FROM satire_versions v
+                JOIN satire_posts p ON p.id=v.post_id AND p.current_version=v.version
+                WHERE p.status IN ('scheduled','draft') AND v.image_path IS NULL
+                AND (v.visual_state IS NULL OR (v.visual_state='failed'
+                     AND v.visual_attempts<3 AND v.visual_last_attempt<=?))
+                ORDER BY CASE WHEN p.scheduled_at IS NULL THEN 1 ELSE 0 END,
+                         p.scheduled_at, v.created_at LIMIT 1""", (retry_before,)).fetchone()
+            if not row:
+                return None
+            db.execute("""UPDATE satire_versions SET visual_state='preparing',
+                visual_attempts=visual_attempts+1,visual_last_attempt=?
+                WHERE post_id=? AND version=?""", (iso_utc(now), row["post_id"], row["version"]))
+            roles = [r[0] for r in db.execute("""SELECT visual_role FROM satire_versions
+                WHERE visual_role IS NOT NULL ORDER BY COALESCE(visual_last_attempt,created_at) DESC LIMIT 2""")]
+            available = [role for role in VISUAL_ROLES if role not in roles]
+            count = db.execute("SELECT count(*) FROM satire_versions WHERE visual_role IS NOT NULL").fetchone()[0]
+            return dict(row), available[count % len(available)]
+
+    def next_visual_role(self):
+        with self.store.connect() as db:
+            roles = [r[0] for r in db.execute("""SELECT visual_role FROM satire_versions
+                WHERE visual_role IS NOT NULL ORDER BY COALESCE(visual_last_attempt,created_at) DESC LIMIT 2""")]
+            available = [role for role in VISUAL_ROLES if role not in roles]
+            count = db.execute("SELECT count(*) FROM satire_versions WHERE visual_role IS NOT NULL").fetchone()[0]
+            return available[count % len(available)]
+
+    def invalidate_visual(self, post_id, version):
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            db.execute("UPDATE satire_posts SET status='scheduled' WHERE id=? AND current_version=? AND status='approved'",
+                       (post_id, version))
+            db.execute("""UPDATE satire_versions SET image_path=NULL,image_sha256=NULL,visual_state=NULL,
+                visual_attempts=0 WHERE post_id=? AND version=?""", (post_id, version))
+
+    def finish_visual(self, post_id, version, visual):
+        path, digest = visual_file(visual["image_path"], self.root)
+        if digest != visual["image_sha256"]:
+            raise PultError("Хеш изображения SMK_SATIRE не совпал")
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            row = db.execute("""SELECT p.status,v.visual_state FROM satire_posts p JOIN satire_versions v
+                ON v.post_id=p.id AND v.version=p.current_version
+                WHERE p.id=? AND p.current_version=?""", (post_id, version)).fetchone()
+            if not row or row["visual_state"] != "preparing" or row["status"] not in ("scheduled", "draft"):
+                raise PultError("Версия SMK_SATIRE изменилась во время подготовки изображения")
+            db.execute("""UPDATE satire_versions SET image_path=?,image_sha256=?,visual_role=?,
+                visual_prompt=?,visual_source_version=?,visual_state='ready'
+                WHERE post_id=? AND version=?""", (path, digest, visual["visual_role"],
+                visual["visual_prompt"], version, post_id, version))
+
+    def fail_visual(self, post_id, version):
+        with self.store.connect() as db:
+            db.execute("""UPDATE satire_versions SET visual_state='failed'
+                WHERE post_id=? AND version=? AND visual_state='preparing'""", (post_id, version))
+
+    def retry_visual(self, post_id, version):
+        with self.store.connect() as db:
+            db.execute("BEGIN IMMEDIATE")
+            result = db.execute("""UPDATE satire_versions SET visual_state=NULL,visual_attempts=0,
+                visual_last_attempt=NULL WHERE post_id=? AND version=? AND visual_state='failed'
+                AND image_path IS NULL AND EXISTS (SELECT 1 FROM satire_posts p
+                    WHERE p.id=satire_versions.post_id AND p.current_version=?
+                    AND p.status IN ('scheduled','draft'))""", (post_id, version, version))
+            if not result.rowcount:
+                raise PultError("Эта версия уже изменилась или изображение готовится")
 
     def seed(self):
         with self.store.connect() as db:
@@ -197,8 +402,11 @@ class SatireStream:
             db.execute("""UPDATE satire_submissions SET status='USER_SUBMISSION'
                 WHERE status='MODERATION' AND result_post_id IS NULL AND last_error IS NULL""")
 
-    def finish_submission(self, submission, candidate):
+    def finish_submission(self, submission, candidate, visual):
         candidate = validate_candidate(candidate)
+        path, digest = visual_file(visual["image_path"], self.root)
+        if digest != visual["image_sha256"]:
+            raise PultError("Хеш изображения SMK_SATIRE не совпал")
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             job = db.execute("SELECT status,target_post_id,base_version FROM satire_submissions WHERE id=?",
@@ -233,11 +441,13 @@ class SatireStream:
                     (post_id, candidate["text"], candidate["genre"], candidate["topic"],
                      candidate["mix_type"], candidate["product_context"], submission["id"]))
             db.execute("""INSERT INTO satire_versions
-                (post_id,version,text,genre,topic,mix_type,product_context,source,instruction,created_at)
-                VALUES(?,?,?,?,?,?,?,?,?,?)""",
+                (post_id,version,text,genre,topic,mix_type,product_context,source,instruction,created_at,
+                 image_path,image_sha256,visual_role,visual_prompt,visual_source_version,visual_state,visual_last_attempt)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
                 (post_id, version, candidate["text"], candidate["genre"], candidate["topic"],
                  candidate["mix_type"], candidate["product_context"], "user", submission["text"],
-                 iso_utc(utc_now())))
+                 iso_utc(utc_now()), path, digest, visual["visual_role"], visual["visual_prompt"],
+                 visual.get("visual_source_version", version), "ready", iso_utc(utc_now())))
             db.execute("UPDATE satire_submissions SET result_post_id=?,edited_text=? WHERE id=?",
                        (post_id, candidate["text"], submission["id"]))
             return post_id
@@ -347,6 +557,7 @@ class SatireStream:
 
     def approve(self, post_id, now=None, version=None):
         now = now or utc_now()
+        self.require_visual(post_id, version)
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             row = db.execute("SELECT status,scheduled_at,current_version FROM satire_posts WHERE id=?", (post_id,)).fetchone()
@@ -382,6 +593,7 @@ class SatireStream:
                 WHERE status='approved' AND scheduled_at<=? ORDER BY scheduled_at""", (iso_utc(now or utc_now()),))]
 
     def claim(self, post_id, now=None):
+        self.require_visual(post_id)
         with self.store.connect() as db:
             db.execute("BEGIN IMMEDIATE")
             result = db.execute("""UPDATE satire_posts SET status='publishing'
