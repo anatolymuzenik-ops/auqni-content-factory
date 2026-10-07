@@ -3,7 +3,7 @@
   "candidates": [
     {
       "id": "SMK-001",
-      "text": "В архиве нашли документ «О сокращении количества документов». К нему прилагалось семь приложений.",
+      "text": "Утвердили порядок борьбы с лишними документами. Он сразу вошёл в тройку самых длинных документов.",
       "genre": "СМК-News",
       "topic": "документы",
       "mix_type": "pure",
@@ -11,11 +11,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "В архиве нашли документ «О сокращении количества документов». К нему прилагалось семь приложений.",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Приказали сократить число документов. Первым документом стал план сокращения документов на 48 страницах.",
+          "Рабочая группа сократила документооборот: теперь каждую форму нужно согласовать только с рабочей группой.",
+          "Утвердили порядок борьбы с лишними документами. Он сразу вошёл в тройку самых длинных документов.",
+          "Документы решили сократить. После обсуждения сократили только слово «документация».",
+          "В архиве нашли приказ не создавать лишних приказов. Под ним лежало шесть приказов о его исполнении."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-002",
-      "text": "— Кто согласовал новую форму? — Комиссия по сокращению согласований. — А кто согласовал комиссию?",
+      "text": "— У нас теперь согласование в один этап. — Какой? — Согласование списка согласующих.",
       "genre": "Диалоги СМК",
       "topic": "согласование",
       "mix_type": "pure",
@@ -23,7 +48,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Кто согласовал новую форму? — Комиссия по сокращению согласований. — А кто согласовал комиссию?",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "— Кто согласует новую форму? — Отдел согласований. — А его создали? — Пока согласовывают.",
+          "— У нас теперь согласование в один этап. — Какой? — Согласование списка согласующих.",
+          "— Форму уже приняли? — Да, кроме раздела «Согласовано». Там спорят о шрифте.",
+          "— Почему документ вернулся? — Вы забыли согласовать отмену согласования.",
+          "Форму согласовали за день. Потом две недели выясняли, имели ли право."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 11
+      }
     },
     {
       "id": "SMK-003",
@@ -35,11 +85,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Совещание по качеству отменили из-за отсутствия повестки. Отдел впервые увидел результативное улучшение процесса.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 6
+      }
     },
     {
       "id": "SMK-004",
-      "text": "«Назначен ответственный» — проблема получила имя, фамилию и номер телефона.",
+      "text": "Ответственный назначен. Проблема впервые узнала, к кому подавать жалобу.",
       "genre": "Переводчик СМК",
       "topic": "ответственность",
       "mix_type": "pure",
@@ -47,11 +116,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "«Назначен ответственный» — проблема получила имя, фамилию и номер телефона.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Назначили ответственного за проблему. Проблема попросила назначить себе другого.",
+          "Проблему передали ответственному. Он попросил передать её согласно маршруту передачи проблем.",
+          "Ответственный назначен. Проблема впервые узнала, к кому подавать жалобу.",
+          "В протокол внесли «ответственный назначен». Проблема осталась, но теперь у неё есть куратор.",
+          "Нашли ответственного. Теперь осталось найти, за что именно он отвечает."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-005",
-      "text": "Прогноз на неделю: в понедельник облачно, во вторник внутренний аудит, к среде все внезапно вспомнят, где лежат инструкции.",
+      "text": "Завтра внутренний аудит. По всему зданию ожидается сезонное цветение надписей «актуально».",
       "genre": "прогноз по качеству",
       "topic": "аудит",
       "mix_type": "pure",
@@ -59,11 +153,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Прогноз на неделю: в понедельник облачно, во вторник внутренний аудит, к среде все внезапно вспомнят, где лежат инструкции.",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Прогноз на неделю: до аудита ясность, во время аудита — внезапное выпадение старых версий.",
+          "Завтра внутренний аудит. По всему зданию ожидается сезонное цветение надписей «актуально».",
+          "К аудиту все процедуры найдены. Теперь ищут людей, которые по ним работают.",
+          "Во вторник аудит. В понедельник возможны порывы обновления инструкций до 30 файлов в час.",
+          "Аудит перенесли на неделю. Актуальные документы вздохнули и снова стали черновиками."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-006",
-      "text": "Из папки «Актуальные формы» пропал единственный актуальный шаблон. Под подозрением папка «Новые актуальные формы 2».",
+      "text": "Утвердили единый шаблон. Он лежит в пяти папках, и в каждой разный.",
       "genre": "криминальная хроника СМК",
       "topic": "шаблоны",
       "mix_type": "pure",
@@ -71,7 +190,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Из папки «Актуальные формы» пропал единственный актуальный шаблон. Под подозрением папка «Новые актуальные формы 2».",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Папку «Актуальные формы» признали устаревшей. Новую назвали «Актуальные формы_новые».",
+          "Нужную форму нашли с первого раза. Оказалось, её уже отменили.",
+          "Из папки «Актуальные формы» пропала актуальная форма. Поиск ведётся в папке «Не трогать — рабочее».",
+          "Утвердили единый шаблон. Он лежит в пяти папках, и в каждой разный.",
+          "На диске обнаружили семь папок «Актуальные формы». Актуальной оказалась восьмая — у бухгалтера."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 12
+      }
     },
     {
       "id": "SMK-007",
@@ -83,7 +227,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Показатель достигнут. Теперь предстоит выяснить, что он показывал.",
+        "original_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "engagement_marker": null,
+        "top_rank": 1
+      }
     },
     {
       "id": "SMK-008",
@@ -95,7 +258,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Корневая причина опоздания отчёта: отчёт три недели ждал совещания о причинах опоздания отчёта.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-009",
@@ -107,11 +289,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Процесс описали так подробно, что теперь сотрудники сначала нарушают его, чтобы успеть начать работу.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-010",
-      "text": "Срочно: подпись «ознакомлен» обнаружена на документе, который никто не смог открыть. Почерк признали уверенным.",
+      "text": "Сотрудники расписались в ознакомлении с процедурой. На вопрос о содержании попросили показать лист ознакомления.",
       "genre": "СМК-News",
       "topic": "бумага",
       "mix_type": "pure",
@@ -119,7 +320,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Срочно: подпись «ознакомлен» обнаружена на документе, который никто не смог открыть. Почерк признали уверенным.",
+        "original_scores": {
+          "humor": 4,
+          "recognizability": 7,
+          "punchline": 3,
+          "shareability": 4
+        },
+        "alternatives": [
+          "Сотрудники расписались в ознакомлении с процедурой. На вопрос о содержании попросили показать лист ознакомления.",
+          "Подписи об ознакомлении собрали быстрее, чем саму инструкцию написали.",
+          "Сотрудник прочёл процедуру целиком. Комиссия проверяет, не нарушил ли он порядок ознакомления.",
+          "Лист ознакомления заполнен. Инструкция пока проходит согласование.",
+          "Никто не знал, как открыть файл процедуры. Зато все знали, где расписаться."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 10
+      }
     },
     {
       "id": "SMK-011",
@@ -131,11 +357,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Риск учли? — Конечно. — А что сделали? — Переименовали его в «возможность».",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 13
+      }
     },
     {
       "id": "SMK-012",
-      "text": "Инспектор попросил показать живой процесс. Ему показали схему. Процесс в это время прятался за дверью.",
+      "text": "Аудитор попросил показать процесс. Ему показали презентацию о том, как его однажды покажут.",
       "genre": "профессиональный анекдот",
       "topic": "проверки",
       "mix_type": "pure",
@@ -143,11 +388,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Инспектор попросил показать живой процесс. Ему показали схему. Процесс в это время прятался за дверью.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 7,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Аудитор попросил показать процесс в работе. Ему показали схему процесса с пометкой «в работе».",
+          "Процесс описан безупречно. Сотрудники попросили познакомить их с автором фантастического романа.",
+          "На схеме процесс занимает три шага. В жизни на втором шаге до сих пор ищут первый.",
+          "Аудитор попросил провести его по процессу. На третьем согласовании попросил карту.",
+          "Аудитор попросил показать процесс. Ему показали презентацию о том, как его однажды покажут."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 14
+      }
     },
     {
       "id": "SMK-013",
-      "text": "«В работе» — статус, который пережил уже трёх руководителей проекта.",
+      "text": "Задача так долго была «в работе», что её уже включили в стаж сотрудников.",
       "genre": "Переводчик СМК",
       "topic": "сроки",
       "mix_type": "pure",
@@ -155,11 +425,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "«В работе» — статус, который пережил уже трёх руководителей проекта.",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Статус «в работе» присвоили в прошлом году. С тех пор единственное, что в работе, — статус.",
+          "Задачу отметили «в работе». Теперь к ней нельзя предъявить претензии: она занята.",
+          "Задача так долго была «в работе», что её уже включили в стаж сотрудников.",
+          "Статус «в работе» прошёл проверку: действительно работает вместо результата.",
+          "Попросили обновить статус задачи. Написали «в активной работе»."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-014",
-      "text": "Сегодня ожидается переменная актуальность документов. К вечеру возможны локальные осадки из версий «финал_точно».",
+      "text": "Вчерашний «окончательный» документ сегодня перешёл в категорию «предыдущий окончательный».",
       "genre": "прогноз по качеству",
       "topic": "версии",
       "mix_type": "pure",
@@ -167,11 +462,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Сегодня ожидается переменная актуальность документов. К вечеру возможны локальные осадки из версий «финал_точно».",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 7,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Прогноз по документам: к вечеру «финал» сменится «финалом после финала».",
+          "В папке объявили окончательную версию. Остальные версии потребовали пересчёта голосов.",
+          "Файл «финал_точно» переименовали в «финал_точно_2». История качества получила продолжение.",
+          "Вчерашний «окончательный» документ сегодня перешёл в категорию «предыдущий окончательный».",
+          "На диске нашли единственную версию без слова «финал». Её признали подозрительной."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-015",
-      "text": "Неизвестный внёс в протокол фразу «решение принято». Следствие выясняет, кем и когда.",
+      "text": "Протокол утвердили. Теперь можно провести совещание и узнать, о чём он.",
       "genre": "криминальная хроника СМК",
       "topic": "протоколы",
       "mix_type": "pure",
@@ -179,7 +499,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Неизвестный внёс в протокол фразу «решение принято». Следствие выясняет, кем и когда.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 7,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "В протоколе написали «решено». Присутствующие пытаются вспомнить, кто именно решился.",
+          "Секретарь записал «решение принято». Решение подало заявление, что его не спрашивали.",
+          "В протоколе обнаружили слово «единогласно». Участники совещания впервые услышали о голосовании.",
+          "Протокол утвердили. Теперь можно провести совещание и узнать, о чём он.",
+          "В протоколе зафиксировали решение, которое никто не озвучивал. Его приняли за инициативу."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-016",
@@ -191,11 +536,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Упростили маршрут согласования. Теперь документ проходит те же кабинеты, но быстрее на схеме.",
+        "original_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "engagement_marker": null,
+        "top_rank": 2
+      }
     },
     {
       "id": "SMK-017",
-      "text": "Корневая причина повторных вопросов: ответ хранится в письме с темой «Важное!!!» за позапрошлый год.",
+      "text": "Повторный вопрос закрыли ссылкой на прошлую переписку. В ней был тот же вопрос.",
       "genre": "корневая причина дня",
       "topic": "коммуникация",
       "mix_type": "pure",
@@ -203,11 +567,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Корневая причина повторных вопросов: ответ хранится в письме с темой «Важное!!!» за позапрошлый год.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Ответ на вопрос лежал в письме «Срочно!» за 2023 год. Поэтому вопрос снова срочный.",
+          "Повторный вопрос закрыли ссылкой на прошлую переписку. В ней был тот же вопрос.",
+          "Сотрудникам велели читать рассылку. Тот, кто прочитал, узнал о новой рассылке извинений.",
+          "Ответ уже отправляли. Искать его решили на отдельном совещании.",
+          "Инструкцию разослали всем. Её нашёл только тот, кто был в отпуске и разобрал почту."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-018",
-      "text": "Перед аудитом все любят порядок. Особенно тот, который можно навести за пятнадцать минут до прихода аудитора.",
+      "text": "Аудитор попросил обычный рабочий документ. Ему объяснили, что обычные убрали специально для аудита.",
       "genre": "короткая стендап-реплика",
       "topic": "аудит",
       "mix_type": "pure",
@@ -215,7 +604,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Перед аудитом все любят порядок. Особенно тот, который можно навести за пятнадцать минут до прихода аудитора.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Перед аудитом сотрудники навели такой порядок, что не смогли найти обычный рабочий беспорядок.",
+          "За день до аудита «временные» файлы впервые узнали, сколько им лет.",
+          "К аудиту шкаф привели в порядок. Рабочие документы пришлось временно вынести из шкафа.",
+          "Перед аудитом порядок навели даже в папке «Разобрать после прошлого аудита». Папку переименовали.",
+          "Аудитор попросил обычный рабочий документ. Ему объяснили, что обычные убрали специально для аудита."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 15
+      }
     },
     {
       "id": "SMK-019",
@@ -227,7 +641,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Комиссия по снижению нагрузки сформировала рабочую группу для оценки нагрузки от работы комиссии.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 16
+      }
     },
     {
       "id": "SMK-020",
@@ -239,7 +672,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Есть подтверждение? — Есть скриншот таблицы. — А таблица? — Она была временной.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-021",
@@ -251,7 +703,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Аудит выявил, что корректирующее действие прошлого аудита — провести ещё один аудит. Коллеги назвали это устойчивым циклом.",
+        "original_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "engagement_marker": null,
+        "top_rank": 3
+      }
     },
     {
       "id": "SMK-022",
@@ -263,7 +734,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Причину устранили? — Пока назначили ответственного за поиск причины. — А он знает? — Это следующий этап.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 17
+      }
     },
     {
       "id": "SMK-023",
@@ -275,7 +765,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Заявление о нежелательном событии исчезло между фразами «сообщайте честно» и «кто за это отвечает».",
+        "original_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "engagement_marker": null,
+        "top_rank": 4
+      }
     },
     {
       "id": "SMK-024",
@@ -287,11 +796,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Показатель улучшился после изменения формулы. Пациенты изменений пока не заметили.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 7
+      }
     },
     {
       "id": "SMK-025",
-      "text": "«Процесс под контролем» — все знают, кто должен был его контролировать.",
+      "text": "Процесс описали как управляемый. Сотрудники узнали об этом после очередного обходного маршрута.",
       "genre": "Переводчик СМК",
       "topic": "процессы",
       "mix_type": "problem",
@@ -299,7 +827,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "«Процесс под контролем» — все знают, кто должен был его контролировать.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Процесс под контролем: за каждым его отклонением теперь закреплено отдельное отклонение.",
+          "Процесс взяли под контроль. Он сразу попросил уточнить, где расписаться за получение контроля.",
+          "Процесс описали как управляемый. Сотрудники узнали об этом после очередного обходного маршрута.",
+          "Контроль процесса работает отлично: каждый месяц подтверждает, что процесс идёт не по нему.",
+          "Владелец процесса указан в документе. Процесс предпочёл работать без знакомства."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-026",
@@ -311,11 +864,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "На карте рисков штиль. В коридоре уже собирают ведра.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-027",
-      "text": "Новую инструкцию отправили «для сведения». Сведения вернулись с просьбой прислать инструкцию ещё раз.",
+      "text": "Новая инструкция вступила в силу. Сотрудники узнали об этом из акта проверки старой.",
       "genre": "профессиональный анекдот",
       "topic": "документы",
       "mix_type": "problem",
@@ -323,7 +895,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Новую инструкцию отправили «для сведения». Сведения вернулись с просьбой прислать инструкцию ещё раз.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Инструкцию разослали всем. Через месяц выяснилось: именно поэтому никто не счёл её своей.",
+          "Новая инструкция вступила в силу. Сотрудники узнали об этом из акта проверки старой.",
+          "Инструкцию отправили «для сведения». Сведения не пришли; зато пришло требование соблюдать инструкцию.",
+          "Старую форму отменили письмом, которое никто не открыл. Новая форма стала нарушением в первый день.",
+          "Сотрудникам показали новую инструкцию. Они попросили ссылку на инструкцию, как её найти."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 8
+      }
     },
     {
       "id": "SMK-028",
@@ -335,11 +932,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Корневая причина просрочки: срок контролировали в таблице, которую открывали только по пятницам после обеда.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-029",
-      "text": "Отчёт об улучшении процесса стал короче. Сам процесс обещал подтянуться к следующему кварталу.",
+      "text": "Отчёт об улучшениях стал на страницу короче. Улучшение записали в отчёт.",
       "genre": "короткая стендап-реплика",
       "topic": "результативность",
       "mix_type": "problem",
@@ -347,7 +963,32 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Отчёт об улучшении процесса стал короче. Сам процесс обещал подтянуться к следующему кварталу.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 7,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Результативность улучшений выросла: теперь о невыполненных мерах отчитываются в срок.",
+          "Отчёт об улучшениях стал на страницу короче. Улучшение записали в отчёт.",
+          "Отчёт подтвердил, что процесс стал эффективнее. Процесс попросил показать, в каком отделении.",
+          "Мероприятие признали результативным: проверка его результативности больше не запланирована.",
+          "Показатель результативности подняли. Результат остался ждать лифт."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-030",
@@ -359,7 +1000,26 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Отдел зарегистрировал почти-событие. Руководство запросило объяснение, почему оно не стало настоящим.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 18
+      }
     },
     {
       "id": "SMK-031",
@@ -371,11 +1031,30 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Мероприятие выполнено? — Галочка стоит. — А проблема? — Не приглашали на совещание.",
+        "original_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 9,
+          "recognizability": 9,
+          "punchline": 9,
+          "shareability": 9
+        },
+        "engagement_marker": null,
+        "top_rank": 5
+      }
     },
     {
       "id": "SMK-032",
-      "text": "Аудиторы попросили не готовиться специально к аудиту. Через час им показали специально подготовленное подтверждение.",
+      "text": "На аудите процесс показали таким, как он описан. Сотрудники впервые его увидели.",
       "genre": "управленческий парадокс",
       "topic": "внутренние аудиты",
       "mix_type": "problem",
@@ -383,11 +1062,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Аудиторы попросили не готовиться специально к аудиту. Через час им показали специально подготовленное подтверждение.",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Аудиторы попросили работать как обычно. Через минуту им принесли специально подготовленное «как обычно».",
+          "Во время аудита все работали по инструкции. После аудита инструкцию торжественно вернули в шкаф.",
+          "«Не готовьтесь к аудиту», — попросили аудиторы. Подготовку к отсутствию подготовки назначили на утро.",
+          "Аудитор попросил показать обычный день. Ему назначили дату и ответственного за обычность.",
+          "На аудите процесс показали таким, как он описан. Сотрудники впервые его увидели."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": 9
+      }
     },
     {
       "id": "SMK-033",
-      "text": "В отделе нашли человека, который помнит, зачем добавили девятое поле в форму. Коллеги, у вас такие легенды тоже есть?",
+      "text": "Попросили объяснить девятое поле. Автор формы предложил добавить десятое — «обоснование девятого». Какая форма у вас разрослась дальше всех?",
       "genre": "СМК-News",
       "topic": "опыт коллег",
       "mix_type": "soft",
@@ -395,11 +1099,37 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "В отделе нашли человека, который помнит, зачем добавили девятое поле в форму. Коллеги, у вас такие легенды тоже есть?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Девятое поле формы никто не заполняет. Удалить нельзя: однажды оно кому-то понадобилось.",
+          "Поле «Прочее» заполняют только когда не хватает полей «Иное» и «Дополнительно».",
+          "В форме нашли пустое поле «Основание». Оказалось, это основание оставить поле пустым.",
+          "В форме девять полей, и девятое называется «при необходимости». Необходимость обнаруживают только на проверке. Коллеги, знакомо?",
+          "Попросили объяснить девятое поле. Автор формы предложил добавить десятое — «обоснование девятого».",
+          "Попросили объяснить девятое поле. Автор формы предложил добавить десятое — «обоснование девятого». Какая форма у вас разрослась дальше всех?"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-034",
-      "text": "— Можно сообщить о событии без объяснительной? — Интересный вопрос. А как у вас на это отвечают?",
+      "text": "— Можно сообщить о событии анонимно? — Да. Имя напишите для обратной связи. У вас это тоже называется анонимностью?",
       "genre": "Диалоги СМК",
       "topic": "события",
       "mix_type": "soft",
@@ -407,11 +1137,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Можно сообщить о событии без объяснительной? — Интересный вопрос. А как у вас на это отвечают?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 9,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "— За сообщение о событии не накажут? — Конечно. Но объяснительную всё-таки напишите. А у вас как начинается «без поиска виноватых»?",
+          "— Можно сообщить о событии анонимно? — Да. Имя напишите для обратной связи. У вас это тоже называется анонимностью?",
+          "Систему сообщений сделали безопасной: теперь имя автора видит только комиссия из двенадцати человек.",
+          "— Кто сообщил о событии? — Мы же договорились искать причину, а не виноватого. — Значит, пока никто?",
+          "Событие зарегистрировали. Первым корректирующим действием назначили разговор с тем, кто его зарегистрировал."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": 19
+      }
     },
     {
       "id": "SMK-035",
-      "text": "Если у документа есть версия «окончательная_новая_2», он уже часть фольклора. Как называется ваш рекордсмен?",
+      "text": "Документу дали имя «финал_последний». Через час он стал предпоследним. У вас сколько финалов?",
       "genre": "короткая стендап-реплика",
       "topic": "документы",
       "mix_type": "soft",
@@ -419,11 +1174,37 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Если у документа есть версия «окончательная_новая_2», он уже часть фольклора. Как называется ваш рекордсмен?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Файл «финал_2» попросили переименовать. Его переименовали в «актуальный_финал_2». Сколько финалов у вас в отделе?",
+          "Документ «окончательный» обновили. Теперь окончательно непонятно, какая версия действует.",
+          "В папке десять финалов. Победитель определится на следующем согласовании.",
+          "«Финал_точно» вчера был актуален. Сегодня он служит контрольной группой для «финал_после_правок».",
+          "Самый старый «финал» датирован прошлым годом. Его не удаляют: он напоминает, что надежда умирает последней. Какой ваш рекорд?",
+          "Документу дали имя «финал_последний». Через час он стал предпоследним. У вас сколько финалов?"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-036",
-      "text": "«Показатель в норме» — теперь бы узнать, у кого. Какие показатели у вас живут отдельной жизнью?",
+      "text": "Показатель стал зелёным после смены диапазона. Данные попросили оставить как были. Какие цвета встречались у вас?",
       "genre": "Переводчик СМК",
       "topic": "показатели",
       "mix_type": "soft",
@@ -431,11 +1212,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "«Показатель в норме» — теперь бы узнать, у кого. Какие показатели у вас живут отдельной жизнью?",
+        "original_scores": {
+          "humor": 4,
+          "recognizability": 7,
+          "punchline": 3,
+          "shareability": 4
+        },
+        "alternatives": [
+          "Все показатели в норме. Норму пересматривали вчера; встреча с реальностью назначена на следующий квартал.",
+          "Показатель стал зелёным после смены диапазона. Данные попросили оставить как были. Какие цвета встречались у вас?",
+          "Показатель выполнили. Теперь он требует назвать, какую проблему решил.",
+          "На совещании все цифры сошлись. Сотрудники разошлись искать пациентов, у которых это заметно.",
+          "«Показатель в норме» — сказал отчёт. Коридор в ответ попросил открыть дверь."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-037",
-      "text": "У корректирующего действия появилась годовщина. Коллеги принесли торт и спросили, когда оно наконец переедет в прошлое. Знакомо?",
+      "text": "У корректирующего действия годовщина. Свечи задули, срок перенесли. Есть знакомые юбиляры?",
       "genre": "профессиональный анекдот",
       "topic": "корректирующие действия",
       "mix_type": "soft",
@@ -443,11 +1249,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "У корректирующего действия появилась годовщина. Коллеги принесли торт и спросили, когда оно наконец переедет в прошлое. Знакомо?",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Корректирующее действие пережило две смены руководства. Теперь его называют традицией. Какое действие у вас долгожитель?",
+          "Мероприятию исполнился год. В подарок ему продлили срок ещё на квартал. У вас такие юбилеи бывают?",
+          "Мероприятие закрыли в срок. Проблема пришла поздравить лично.",
+          "У корректирующего действия годовщина. Свечи задули, срок перенесли. Есть знакомые юбиляры?",
+          "К мероприятию прикрепили ответственного. Ответственный успел сменить должность, мероприятие — нет."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-038",
-      "text": "Прогноз: перед аудитом резко вырастет спрос на слово «актуализировано». Какое слово у вас звучит чаще всего?",
+      "text": "Утром перед аудитом папка «старое» получила новое имя «архив». А что меняется у вас за ночь?",
       "genre": "прогноз по качеству",
       "topic": "аудит",
       "mix_type": "soft",
@@ -455,11 +1286,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Прогноз: перед аудитом резко вырастет спрос на слово «актуализировано». Какое слово у вас звучит чаще всего?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "К аудиту слово «актуализировано» встречается чаще фамилий сотрудников. А у вас какое слово выходит на смену первым?",
+          "К аудиту все документы актуализированы. Особенно те, которые вчера назывались «потом».",
+          "Прогноз: перед аудитом ожидается всплеск слова «пересмотрено». Содержимое документов остаётся без изменений.",
+          "Утром перед аудитом папка «старое» получила новое имя «архив». А что меняется у вас за ночь?",
+          "Перед аудитом чаще всего звучит «это рабочая версия». Какая фраза спасает ваши документы?"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-039",
-      "text": "Следствие ищет владельца процесса. В документах он есть, в отпуске — тоже. А у вас как находят владельца?",
+      "text": "Владельца процесса нашли в реестре. В отделе его ищут третий год. У вас владельцы тоже живут только в таблице?",
       "genre": "криминальная хроника СМК",
       "topic": "процессы",
       "mix_type": "soft",
@@ -467,11 +1323,36 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Следствие ищет владельца процесса. В документах он есть, в отпуске — тоже. А у вас как находят владельца?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Владельца процесса нашли в реестре. В отделе его ищут третий год. У вас владельцы тоже живут только в таблице?",
+          "— Кто владелец процесса? — По документам Иванов. — А в жизни? — Процесс бесхозный. Как это устроено у вас?",
+          "Процессу назначили владельца. Теперь он записан на человека, который впервые слышит о процессе.",
+          "В схеме у процесса два владельца. Оба говорят, что это схема другого.",
+          "Владелец процесса ушёл в отпуск. Процесс воспользовался шансом и ушёл по обходному маршруту. А у вас кто остаётся за старшего?"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-040",
-      "text": "Риск занесли в реестр, и он почувствовал себя признанным. Что у вас происходит с риском после регистрации?",
+      "text": "Риск занесли в реестр. Там он дождался квартального пересмотра и стал инцидентом. Знакомый маршрут?",
       "genre": "управленческий парадокс",
       "topic": "риски",
       "mix_type": "soft",
@@ -479,11 +1360,37 @@
       "selected": true,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Риск занесли в реестр, и он почувствовал себя признанным. Что у вас происходит с риском после регистрации?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 7,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Риск занесли в реестр. Там он дождался квартального пересмотра и стал инцидентом. Знакомый маршрут?",
+          "Риск зарегистрировали и поставили статус «контролируется». Через месяц спросили, кем.",
+          "В реестре риск низкий. В коридоре сотрудники несут второе ведро. У вас риски тоже любят бумагу?",
+          "Риск оценили, назначили срок и ответственного. Теперь он ждёт, когда его наконец заметят в коридоре.",
+          "Риск в реестре уже «обработан». На практике он только начал знакомство с отделением. Как у вас проверяют встречу двух версий?",
+          "Риск успешно внесли в реестр. Теперь риск в том, что реестр никто не открывает. У вас как часто открывают?"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": 20
+      }
     },
     {
       "id": "SMK-041",
-      "text": "Корневая причина молчания в переписке: адресат был в копии и решил не вмешиваться в процесс.",
+      "text": "Письмо отправили «всем заинтересованным». Не заинтересовался никто, кроме автора.",
       "genre": "корневая причина дня",
       "topic": "почта",
       "mix_type": "pure",
@@ -491,7 +1398,32 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Корневая причина молчания в переписке: адресат был в копии и решил не вмешиваться в процесс.",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Всем поставили в копию письмо с вопросом. Каждый решил, что отвечать будет тот, кому письмо адресовано.",
+          "Срочный вопрос отправили двадцати людям. Ответил автоответчик одного из них.",
+          "Письмо отправили «всем заинтересованным». Не заинтересовался никто, кроме автора.",
+          "Коллеги молчали в переписке неделю. На совещании выяснилось, что каждый ждал итогов переписки.",
+          "Ответ нашли в старой цепочке писем. Это оказался вопрос, на который отвечали сейчас."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-042",
@@ -503,7 +1435,26 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Архив объявил амнистию документам с именем «новый». Никто не пришёл: все оказались действующими.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-043",
@@ -515,7 +1466,26 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Что решили на встрече? — Назначить встречу с теми, кто принимает решения.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-044",
@@ -527,11 +1497,30 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Форму сократили с пяти страниц до одной. Теперь к ней прилагается инструкция на шесть.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-045",
-      "text": "«Вопрос срочный» — до тех пор, пока не понадобится ответить отправителю.",
+      "text": "Срок ответа — сегодня. Срок принятия решения по ответу — после праздников.",
       "genre": "Переводчик СМК",
       "topic": "срочность",
       "mix_type": "pure",
@@ -539,11 +1528,36 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "«Вопрос срочный» — до тех пор, пока не понадобится ответить отправителю.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 7,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Письмо с пометкой «СРОЧНО» не открывали три недели. Зато обсуждали, почему вопрос не движется.",
+          "Вопрос срочный до тех пор, пока ответ не требует решения отправителя.",
+          "Сообщение «Срочно! Ответьте сегодня» пришло с адреса сотрудника в отпуске. Отпуск у него ещё две недели.",
+          "Срок ответа — сегодня. Срок принятия решения по ответу — после праздников.",
+          "На письмо «Нужно решить до обеда» ответили через месяц: «Какой обед имелся в виду?»"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-046",
-      "text": "В первой половине дня возможен «финальный вариант», во второй — «финальный вариант после правок».",
+      "text": "На сервере запустили поиск по слову «финал». Он вернул все документы отдела, кроме действующего.",
       "genre": "прогноз по качеству",
       "topic": "версии",
       "mix_type": "pure",
@@ -551,11 +1565,37 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "В первой половине дня возможен «финальный вариант», во второй — «финальный вариант после правок».",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "На диске появился «окончательный_2». «Окончательный_1» потребовал объяснений.",
+          "Слово «финал» в имени файла теперь означает, что обсуждение можно начинать.",
+          "Файл «финал_без_правок» вернули с правками. Его не стали переименовывать из уважения к традиции.",
+          "На совещании утвердили финальную версию. К вечеру утвердили правила нумерации финальных версий.",
+          "Сотрудник открыл «финал». Начальник попросил «финал, который после финала».",
+          "На сервере запустили поиск по слову «финал». Он вернул все документы отдела, кроме действующего."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-047",
-      "text": "В протоколе нашли подпись человека, который не присутствовал. Он заявил, что мысленно поддерживал решение.",
+      "text": "В протоколе появилось «все согласны». Несогласных не было: их не приглашали.",
       "genre": "криминальная хроника СМК",
       "topic": "подписи",
       "mix_type": "pure",
@@ -563,7 +1603,32 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "В протоколе нашли подпись человека, который не присутствовал. Он заявил, что мысленно поддерживал решение.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 7,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "В протоколе нашли подпись отсутствовавшего. Коллеги уверяют, что он заранее согласился со всем, чего ещё не слышал.",
+          "Совещание прошло без кворума. Протокол утверждён полным составом.",
+          "Согласование подписал человек в отпуске. Ему объяснили, что процесс не может ждать отпуск.",
+          "В протоколе появилось «все согласны». Несогласных не было: их не приглашали.",
+          "Подписант отсутствовал на встрече, зато присутствовал в графе «Согласовано»."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-048",
@@ -575,7 +1640,26 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "План улучшений выполнили на сто процентов: все пункты перенесли в новый план.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-049",
@@ -587,11 +1671,30 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "На схеме процесса стрелки идут вверх, вниз и в «уточнить у Марии».",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-050",
-      "text": "Обнаружена цепочка писем длиной в сорок сообщений. Исходный вопрос найден на третьем, ответ — на сорок первом.",
+      "text": "Письмо с вопросом отправили 14 раз. Ответ нашли в первом письме: «обсудим на встрече».",
       "genre": "СМК-News",
       "topic": "почта",
       "mix_type": "pure",
@@ -599,7 +1702,32 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Обнаружена цепочка писем длиной в сорок сообщений. Исходный вопрос найден на третьем, ответ — на сорок первом.",
+        "original_scores": {
+          "humor": 6,
+          "recognizability": 8,
+          "punchline": 5,
+          "shareability": 6
+        },
+        "alternatives": [
+          "Цепочка писем дошла до сорокового сообщения. Исходный вопрос уже ушёл в отпуск.",
+          "После 40 писем выяснилось: все отвечали на разные версии вложения.",
+          "В длинной переписке нашли ответ. Он начинался словами «как я уже писал ниже».",
+          "Письмо с вопросом отправили 14 раз. Ответ нашли в первом письме: «обсудим на встрече».",
+          "За два месяца переписки договорились отправить одно письмо всем участникам переписки."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-051",
@@ -611,7 +1739,26 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Кто проверяет выполнение? — Тот, кто отчитывается о выполнении. — Удобно. — Ещё бы.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-052",
@@ -623,7 +1770,26 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "В отчёте все показатели зелёные. Красным остался только вопрос «почему».",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-053",
@@ -635,7 +1801,26 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Корневая причина работы по старой форме: новую разослали в письме «Для информации» вместе с меню столовой.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-054",
@@ -647,11 +1832,30 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Риск промедления оценили как низкий. Заседание по его переоценке назначено на следующий год.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-055",
-      "text": "«Мероприятие закрыто» — файл закрыт, вопрос открыт.",
+      "text": "Мероприятие закрыли, потому что закончился квартал. Проблема отказалась сверяться с календарём.",
       "genre": "Переводчик СМК",
       "topic": "результативность",
       "mix_type": "problem",
@@ -659,7 +1863,32 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "«Мероприятие закрыто» — файл закрыт, вопрос открыт.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Мероприятие закрыли. Проблема попросила оставить дверь открытой: она ещё здесь.",
+          "Файл с корректирующим действием закрыт. В отделении идёт повторный показ.",
+          "Отчёт: «Мероприятие выполнено». Повторная проблема: «Я тоже».",
+          "Мероприятие закрыли, потому что закончился квартал. Проблема отказалась сверяться с календарём.",
+          "Корректирующее действие оказалось результативным — его пришлось повторить пять раз."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-056",
@@ -671,11 +1900,30 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "Маршрут пациента упростили в презентации. Пациент пока не получил презентацию.",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 8,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": null,
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-057",
-      "text": "— Что сложнее всего перед аудитом? — Найти документ, который вчера лежал здесь. А у вас?",
+      "text": "К аудиту нашли все инструкции. Теперь осталось найти инструкцию, по которой действительно работают. Как у вас?",
       "genre": "Диалоги СМК",
       "topic": "внутренние аудиты",
       "mix_type": "soft",
@@ -683,11 +1931,36 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "— Что сложнее всего перед аудитом? — Найти документ, который вчера лежал здесь. А у вас?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "— Что было самым трудным перед аудитом? — Убедить рабочие документы выглядеть как утверждённые. А у вас?",
+          "Перед аудитом документ «на согласовании» переодели в документ «для ознакомления». Что у вас меняет имя за ночь?",
+          "— Актуальную форму нашли? — Нашли три. Теперь ищем неактуальную, чтобы было с чем сравнить. А у вас?",
+          "К аудиту нашли все инструкции. Теперь осталось найти инструкцию, по которой действительно работают. Как у вас?",
+          "— Что покажем аудитору? — Реальную работу. — Тогда лучше сначала предупредить реальную работу."
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-058",
-      "text": "В организации обнаружили инструкцию без правок за пять лет. Специалисты обсуждают: она идеальна или о ней забыли? Расскажите свою версию.",
+      "text": "Инструкцию не обновляли пять лет. На проверке выяснилось: её не только не обновляли. У вас есть такие долгожители?",
       "genre": "СМК-News",
       "topic": "истории коллег",
       "mix_type": "soft",
@@ -695,7 +1968,33 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "В организации обнаружили инструкцию без правок за пять лет. Специалисты обсуждают: она идеальна или о ней забыли? Расскажите свою версию.",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "Инструкция не менялась пять лет. В отделе спорят: всё идеально или кнопку «исправить» так и не нашли? Как думаете?",
+          "У инструкции пятая годовщина без правок. Сотрудники отмечают: в отделении она тоже ни разу не появлялась.",
+          "Процедура не менялась с 2020 года. Процесс уже сменил три кабинета и имя.",
+          "Документ без правок за пять лет признали стабильным. Сотрудники признали его незнакомым.",
+          "Инструкцию не обновляли пять лет. На проверке выяснилось: её не только не обновляли. У вас есть такие долгожители?",
+          "В архиве нашли инструкцию, по которой никто не работал. Зато ежегодно подтверждали её актуальность. Знакомо?"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-059",
@@ -707,11 +2006,30 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "У нас «сообщить о событии» и «начать расследование автора сообщения» звучат слишком похоже. Встречали такое?",
+        "original_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "alternatives": [],
+        "decision": "retained",
+        "final_scores": {
+          "humor": 8,
+          "recognizability": 9,
+          "punchline": 8,
+          "shareability": 8
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     },
     {
       "id": "SMK-060",
-      "text": "«Вернёмся к вопросу позже» — вопрос получает постоянное место в повестке. Какой у вас рекорд?",
+      "text": "К вопросу обещали вернуться позже. Позже попросило назвать точную дату.",
       "genre": "Переводчик СМК",
       "topic": "совещания",
       "mix_type": "soft",
@@ -719,7 +2037,47 @@
       "selected": false,
       "used": false,
       "publication_date": null,
-      "reactions": null
+      "reactions": null,
+      "editorial_review": {
+        "original_text": "«Вернёмся к вопросу позже» — вопрос получает постоянное место в повестке. Какой у вас рекорд?",
+        "original_scores": {
+          "humor": 5,
+          "recognizability": 8,
+          "punchline": 4,
+          "shareability": 5
+        },
+        "alternatives": [
+          "«Вернёмся к вопросу позже» записали в протокол. Через год вопрос вернулся сам — с юбилеем. У вас есть такие гости?",
+          "Вопрос перенесли на следующее совещание. Он ходит туда уже чаще сотрудников.",
+          "Пункт «разное» занял два часа. Основные пункты перенесли в «разное» следующей встречи.",
+          "К вопросу обещали вернуться позже. Позже попросило назвать точную дату.",
+          "В протоколе «вернуться к вопросу» — самая стабильная задача отдела. Что у вас живёт дольше всех?"
+        ],
+        "decision": "rewritten; original rejected",
+        "final_scores": {
+          "humor": 7,
+          "recognizability": 8,
+          "punchline": 7,
+          "shareability": 7
+        },
+        "engagement_marker": "audience_question",
+        "top_rank": null
+      }
     }
-  ]
+  ],
+  "editorial_audit": {
+    "assessment": "editorial judgment, not measured audience reactions",
+    "criteria": [
+      "humor",
+      "recognizability",
+      "punchline",
+      "shareability"
+    ],
+    "scale": "1-10; original and final scores assessed separately",
+    "weak_original_threshold": "any original criterion below 7",
+    "weak_originals_rewritten": 33,
+    "minimum_alternatives_per_weak_original": 5,
+    "selected_final_floor": "all four criteria at least 7",
+    "engagement_marker": "audience_question marks soft posts; questions are not counted as punchlines"
+  }
 }
