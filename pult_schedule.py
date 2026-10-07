@@ -14,7 +14,7 @@ STATUS = {
     "preparing": "Готовится", "ready": "Ожидает согласования",
     "approved": "Согласовано", "publishing": "Отправляется",
     "uncertain": "Отправка требует проверки", "published": "Опубликовано",
-    "scheduled": "Запланировано",
+    "scheduled": "Запланировано", "editing": "Готовится новая версия",
 }
 MAX_MESSAGE = 3500
 

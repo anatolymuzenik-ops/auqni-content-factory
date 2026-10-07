@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from pult_core import PultError
-from pult_satire import SatireStream, read_bank
+from pult_satire import SatireStream, read_bank, validate_candidate
 from pult_store import Store
 from telegram_pult import Pult
 
@@ -15,6 +15,129 @@ ROOT = Path(__file__).resolve().parent
 
 
 class SatireTests(unittest.TestCase):
+    def test_bank_edit_keeps_versions_and_revokes_approval(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
+                                  ROOT / "content/smk_satire_bank.json",
+                                  {"time": "08:30", "weekdays": [0, 1, 2, 3, 4], "horizon_days": 1})
+            stream.seed()
+            before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
+            post_id = stream.plan(before)[0][0]
+            original = stream.get(post_id)["text"]
+            stream.approve(post_id, before, version=1)
+            stream.begin_edit(post_id, 1)
+            submission_id = stream.queue_edit(post_id, 1, "Сделай финал о четвёртом согласовании")
+            self.assertEqual(stream.get(post_id)["status"], "editing")
+            self.assertEqual(stream.due(datetime(2026, 10, 9, 5, 31, tzinfo=timezone.utc)), [])
+            with stream.store.connect() as db:
+                submission = dict(db.execute("SELECT * FROM satire_submissions WHERE id=?", (submission_id,)).fetchone())
+            stream.claim_submission()
+            candidate = {"text": "Согласовали сокращение маршрута документа. Теперь четыре подписи ставят в одной комнате.",
+                         "genre": "СМК-News", "topic": "Согласование", "mix_type": stream.get(post_id)["mix_type"],
+                         "product_context": None}
+            stream.finish_submission(submission, candidate)
+            self.assertEqual(stream.version(post_id, 1)["text"], original)
+            self.assertEqual(stream.version(post_id, 2)["text"], candidate["text"])
+            self.assertEqual(stream.get(post_id)["current_version"], 2)
+            self.assertEqual(stream.get(post_id)["status"], "scheduled")
+            with self.assertRaises(PultError):
+                stream.approve(post_id, before, version=1)
+            stream.approve(post_id, before, version=2)
+            self.assertEqual(stream.get(post_id)["status"], "approved")
+            stream.begin_edit(post_id, 2)
+            second_id = stream.queue_edit(post_id, 2, "Укороти первую фразу")
+            with stream.store.connect() as db:
+                second = dict(db.execute("SELECT * FROM satire_submissions WHERE id=?", (second_id,)).fetchone())
+            stream.claim_submission()
+            next_candidate = {**candidate, "text": "Маршрут согласования сократили. Подписи остались те же — теперь все четыре ставят в одной комнате."}
+            stream.finish_submission(second, next_candidate)
+            self.assertEqual(stream.get(post_id)["current_version"], 3)
+            self.assertEqual(stream.version(post_id, 2)["text"], candidate["text"])
+            self.assertEqual(stream.version(post_id, 3)["text"], next_candidate["text"])
+
+    def test_owner_idea_goes_to_review_then_free_weekday_slot(self):
+        class API:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, method, payload):
+                self.calls.append((method, payload))
+                return {"message_id": 1}
+
+        class Writer:
+            def run(self, idea, previous=None, instruction=None, mix_type=None):
+                assert idea == "Хаос — это такой порядок"
+                return {"text": "В отделе качества хаос назвали порядком. Теперь его нужно согласовать и внести в реестр процессов.",
+                        "genre": "управленческий парадокс", "topic": "процессы", "mix_type": "soft",
+                        "product_context": "сбор болей и продуктовых идей"}
+
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {"AUQNI_OWNER_USER_ID": "123"}):
+            root = Path(temp)
+            (root / "content").mkdir()
+            (root / "content/smk_satire_bank.json").write_bytes((ROOT / "content/smk_satire_bank.json").read_bytes())
+            config = json.loads((ROOT / "pult_config.json").read_text())
+            api = API()
+            pult = Pult(root, config, api, satire_writer=Writer())
+            pult.handle_message({"from": {"id": 123}, "chat": {"id": 123, "type": "private"}, "text": "Создать пост"})
+            pult.handle_message({"from": {"id": 123}, "chat": {"id": 123, "type": "private"},
+                                 "text": "Хаос — это такой порядок"})
+            confirm = api.calls[-1][1]["reply_markup"]["inline_keyboard"][0]
+            self.assertIn("confirm:satire", [button["callback_data"] for button in confirm])
+            pult.handle_callback({"id": "cb", "from": {"id": 123}, "message": {"chat": {"id": 123}},
+                                  "data": "confirm:satire"})
+            self.assertTrue(pult.process_one_satire_submission())
+            with pult.store.connect() as db:
+                submission = dict(db.execute("SELECT * FROM satire_submissions LIMIT 1").fetchone())
+            post = pult.satire.get(submission["result_post_id"])
+            self.assertEqual(post["status"], "draft")
+            self.assertEqual(post["origin"], "user")
+            self.assertIsNone(post["scheduled_at"])
+            self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
+            self.assertEqual(pult.satire.version(post["id"], 1)["source"], "user")
+            buttons = api.calls[-1][1]["reply_markup"]["inline_keyboard"][0]
+            self.assertEqual([b["text"] for b in buttons], ["Принято", "Изменить", "Отклонить"])
+            pult.handle_callback({"id": "cb2", "from": {"id": 123}, "message": {"chat": {"id": 123}},
+                                  "data": f"satire:approve:{post['id']}:1"})
+            approved = pult.satire.get(post["id"])
+            self.assertEqual(approved["status"], "approved")
+            self.assertIsNotNone(approved["scheduled_at"])
+            with pult.store.connect() as db:
+                self.assertEqual(db.execute("SELECT status FROM satire_submissions WHERE id=?",
+                                            (submission["id"],)).fetchone()[0], "APPROVED")
+            from pult_core import moscow_zone
+            local_slot = datetime.fromisoformat(approved["scheduled_at"]).astimezone(moscow_zone())
+            self.assertLess(local_slot.weekday(), 5)
+            self.assertEqual(local_slot.strftime("%H:%M"), "08:30")
+            self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
+            pult.handle_callback({"id": "cb3", "from": {"id": 123}, "message": {"chat": {"id": 123}},
+                                  "data": f"satire:edit:{post['id']}:1"})
+            self.assertEqual(pult.satire.get(post["id"])["status"], "editing")
+            self.assertFalse(pult.satire.due(datetime(2026, 12, 1, tzinfo=timezone.utc)))
+            pult.handle_callback({"id": "cb4", "from": {"id": 123}, "message": {"chat": {"id": 123}},
+                                  "data": f"satire:cancel:{post['id']}:1"})
+            self.assertEqual(pult.satire.get(post["id"])["status"], "scheduled")
+
+    def test_generated_candidate_must_be_short_and_typed(self):
+        with self.assertRaises(PultError):
+            validate_candidate({"text": "Слишком коротко", "genre": "новость", "topic": "СМК", "mix_type": "pure"})
+
+    def test_failed_edit_remains_unapproved_and_can_retry(self):
+        with tempfile.TemporaryDirectory() as temp:
+            stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
+                                  ROOT / "content/smk_satire_bank.json",
+                                  {"time": "08:30", "horizon_days": 1})
+            stream.seed()
+            post_id = stream.plan(datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc))[0][0]
+            stream.begin_edit(post_id, 1)
+            submission_id = stream.queue_edit(post_id, 1, "Сделай короче")
+            submission = stream.claim_submission()
+            stream.fail_submission(submission, PultError("writer failed"))
+            self.assertEqual(stream.get(post_id)["status"], "scheduled")
+            self.assertFalse(stream.due(datetime(2026, 12, 1, tzinfo=timezone.utc)))
+            stream.retry_submission(submission_id)
+            self.assertEqual(stream.get(post_id)["status"], "editing")
+            self.assertEqual(stream.claim_submission()["id"], submission_id)
+
     def test_bank_and_weekday_slots_keep_mix(self):
         bank = read_bank(ROOT / "content/smk_satire_bank.json")
         self.assertEqual(len(bank), 60)

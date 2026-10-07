@@ -27,7 +27,7 @@ from pult_core import (PultError, Pipeline, iso_utc, moscow_zone,
                        local_label, next_slot, parse_local_time,
                        snapshot_version, utc_now, validate_content)
 from pult_store import Store
-from pult_satire import SatireStream, review_label
+from pult_satire import SatireStream, SatireWriter, review_label
 from pult_schedule import main_variant, schedule_messages
 from telegram_channel import TelegramPublisher
 
@@ -118,7 +118,8 @@ class BotAPI:
 class Pult:
     MAX_TODAY_REJECTIONS = 6
 
-    def __init__(self, root, config, api, store=None, pipeline=None, publisher=None, planner=None):
+    def __init__(self, root, config, api, store=None, pipeline=None, publisher=None, planner=None,
+                 satire_writer=None):
         self.root = Path(root).resolve()
         self.workspace = self.root.parent.parent.resolve()
         self.config = config
@@ -143,6 +144,8 @@ class Pult:
                        if satire_settings.get("enabled") else None)
         if self.satire:
             self.satire.seed()
+        self.satire_writer = (satire_writer or SatireWriter(self.root, self.workspace, self.data,
+                              config.get("pipeline_command"))) if self.satire else None
 
     def plan_autonomously(self, now=None):
         """Fill free configured slots with unapproved drafts through the existing queue."""
@@ -378,6 +381,45 @@ class Pult:
         except PultError:
             pass
 
+    def show_satire_review(self, post_id):
+        row = self.satire.get(post_id) if self.satire else None
+        if not row or row["status"] not in ("scheduled", "draft", "approved"):
+            raise PultError("SMK_SATIRE не ждёт согласования")
+        version = row["current_version"]
+        buttons = [] if row["status"] == "approved" else [("Принято", f"satire:approve:{post_id}:{version}")]
+        buttons.extend([("Изменить", f"satire:edit:{post_id}:{version}"),
+                        ("Отклонить", f"satire:reject:{post_id}:{version}")])
+        status = "Согласовано" if row["status"] == "approved" else "Ожидает согласования"
+        self.say(review_label(post_id, row["text"], row["scheduled_at"], version) + f"\n\n{status}",
+                 [buttons])
+
+    def process_one_satire_submission(self):
+        if not self.satire:
+            return False
+        submission = self.satire.claim_submission()
+        if not submission:
+            return False
+        try:
+            old = self.satire.get(submission["target_post_id"]) if submission["target_post_id"] else None
+            if submission["target_post_id"] and not old:
+                raise PultError("Пост SMK_SATIRE для правки не найден")
+            candidate = self.satire_writer.run(
+                submission["text"], previous=old["text"] if old else None,
+                instruction=submission["text"] if old else None,
+                mix_type=old["mix_type"] if old else None)
+            post_id = self.satire.finish_submission(submission, candidate)
+        except Exception as error:
+            self.satire.fail_submission(submission, error)
+            self.safe_say(f"Идею SMK_SATIRE #{submission['id']} пока не удалось подготовить. "
+                          "Исходный текст сохранён.",
+                          [[("Повторить", f"satire:retry:{submission['id']}")]])
+        else:
+            try:
+                self.show_satire_review(post_id)
+            except PultError:
+                print(f"SMK_SATIRE review delivery failed for {post_id}", file=sys.stderr)
+        return True
+
     def show_review(self, item_id):
         item = self.store.get(item_id)
         if not item or not item["current_version"]:
@@ -497,6 +539,13 @@ class Pult:
         if user.get("id") != self.owner_id or chat.get("id") != self.owner_id or chat.get("type") != "private":
             return
         text = (message.get("text") or "").strip()
+        if text in ("/start", "Создать пост") and self.satire:
+            pending_edit = self.store.get_pending()
+            if pending_edit and pending_edit.get("kind") == "satire_edit_input":
+                try:
+                    self.satire.cancel_edit(pending_edit["post_id"], pending_edit["version"])
+                except PultError:
+                    pass  # a queued revision remains unapproved and continues in the worker
         if text == "/start":
             self.store.clear_pending()
             self.say("Личный пульт AUQNI. Выберите действие.", permanent=True)
@@ -510,6 +559,15 @@ class Pult:
             return
         if text == "Расписание":
             self.show_schedule()
+            return
+        satire_input = re.fullmatch(r"(?:Сатира|SMK_SATIRE)\s*:\s*(.+)", text, re.I | re.S)
+        if satire_input and self.satire and not self.store.get_pending():
+            submission_id = self.satire.add_idea(satire_input.group(1))
+            self.say(f"Идея SMK_SATIRE #{submission_id} принята. Подготовлю пост и пришлю на согласование.")
+            return
+        satire_show = re.fullmatch(r"Покажи\s+(SMK-\d{3,})", text, re.I)
+        if satire_show and self.satire:
+            self.show_satire_review(satire_show.group(1).upper())
             return
         show = re.fullmatch(r"Покажи\s+№?(\d+)", text, re.I)
         edit = re.fullmatch(r"Поправь\s+№?(\d+)\s*:\s*(.+)", text, re.I | re.S)
@@ -543,9 +601,13 @@ class Pult:
             self.say("Выберите «Создать пост» или «Контент-план». Можно также написать «Покажи №37».", permanent=True)
             return
         kind = pending["kind"]
-        if kind in ("create_input", "idea_input", "edit_input"):
+        if kind in ("create_input", "idea_input", "edit_input", "satire_edit_input"):
             inputs = self._input_from_message(message)
-            if kind == "edit_input":
+            if kind == "satire_edit_input":
+                submission_id = self.satire.queue_edit(pending["post_id"], pending["version"], inputs["text"])
+                self.store.clear_pending()
+                self.say(f"SMK_SATIRE: правка #{submission_id} готовится. Согласование предыдущей версии снято.")
+            elif kind == "edit_input":
                 item_id = pending["item_id"]
                 item = self.store.get(item_id)
                 if not item or item["current_version"] != pending["version"]:
@@ -561,7 +623,11 @@ class Pult:
             else:
                 self.store.set_pending({"kind": "create_confirm", "inputs": inputs})
                 summary = (inputs["text"] or "Вложение")[:400]
-                self.say("Вход для поста:\n" + summary + "\n\nЧто сделать?", [[("Создать", "confirm:create"), ("В контент-план", "confirm:plan"), ("Отмена", "confirm:cancel")]])
+                buttons = [("Создать", "confirm:create"), ("В контент-план", "confirm:plan")]
+                if self.satire and inputs["text"].strip():
+                    buttons.append(("SMK_SATIRE", "confirm:satire"))
+                buttons.append(("Отмена", "confirm:cancel"))
+                self.say("Вход для поста:\n" + summary + "\n\nЧто сделать?", [buttons])
 
     def handle_callback(self, query):
         user = query.get("from", {})
@@ -589,21 +655,50 @@ class Pult:
         if data.startswith("satire:"):
             if not self.satire:
                 raise PultError("Поток SMK_SATIRE выключен")
-            match = re.fullmatch(r"satire:(approve|reject):(SMK-\d{3})", data)
+            retry = re.fullmatch(r"satire:retry:(\d+)", data)
+            if retry:
+                self.satire.retry_submission(int(retry.group(1)))
+                self.say("Идея SMK_SATIRE снова поставлена на подготовку.")
+                return
+            match = re.fullmatch(r"satire:(approve|reject|edit|cancel):(SMK-\d{3,})(?::(\d+))?", data)
             if not match:
                 raise PultError("Неизвестная кнопка SMK_SATIRE")
-            action, post_id = match.groups()
+            action, post_id, raw_version = match.groups()
+            version = int(raw_version) if raw_version else 1  # prior production cards were v1 only
+            row = self.satire.get(post_id)
+            if not row or row["current_version"] != version:
+                raise PultError("Карточка SMK_SATIRE устарела; откройте последнюю версию")
             if action == "approve":
-                self.satire.approve(post_id)
-                self.say(f"{post_id} принят для {local_label(self.satire.get(post_id)['scheduled_at'])}.")
+                stamp = self.satire.approve(post_id, version=version)
+                self.say(f"{post_id} · версия {version} принята для {local_label(stamp)}.")
+            elif action == "edit":
+                if row["status"] not in ("scheduled", "approved", "draft"):
+                    raise PultError("Пост уже недоступен для правки")
+                self.satire.begin_edit(post_id, version)
+                self.store.set_pending({"kind": "satire_edit_input", "post_id": post_id, "version": version})
+                self.say(f"Что изменить в {post_id} · версия {version}? Пришлите текст или голосовое сообщение. "
+                         "Прежнее согласование снято.", [[("Отмена", f"satire:cancel:{post_id}:{version}")]])
+            elif action == "cancel":
+                self.satire.cancel_edit(post_id, version)
+                pending = self.store.get_pending()
+                if pending and pending.get("kind") == "satire_edit_input" and pending["post_id"] == post_id:
+                    self.store.clear_pending()
+                self.say(f"Правка {post_id} отменена. Прежнее согласование не восстановлено; откройте пост заново.")
             else:
-                self.satire.reject(post_id)
+                self.satire.reject(post_id, version=version)
                 self.say(f"{post_id} отклонён; публикации не будет.")
             return
         if data.startswith("confirm:"):
             pending = self.store.get_pending()
             if not pending or pending.get("kind") != "create_confirm":
                 raise PultError("Ввод уже обработан")
+            if data == "confirm:satire":
+                if not self.satire:
+                    raise PultError("Поток SMK_SATIRE выключен")
+                submission_id = self.satire.add_idea(pending["inputs"]["text"])
+                self.store.clear_pending()
+                self.say(f"Идея SMK_SATIRE #{submission_id} принята. Подготовлю короткий пост и пришлю на согласование.")
+                return
             self.store.clear_pending()
             if data == "confirm:cancel":
                 self.say("Отменено.")
@@ -707,9 +802,10 @@ class Pult:
 
     def tick_satire(self, now):
         for post_id, body, stamp in self.satire.plan(now):
-            self.safe_say(review_label(post_id, body, stamp),
-                          [[("Принято", f"satire:approve:{post_id}"),
-                            ("Отклонить", f"satire:reject:{post_id}")]])
+            try:
+                self.show_satire_review(post_id)
+            except PultError:
+                pass
         for row in self.satire.due(now):
             if not self.satire.claim(row["id"], now):
                 continue
@@ -819,11 +915,13 @@ class Pult:
         interrupted = self.store.recover_jobs()
         uncertain = self.store.recover_publications()
         satire_uncertain = self.satire.recover() if self.satire else []
+        if self.satire:
+            self.satire.recover_submissions()
 
         def worker():
             while not stop.is_set():
                 try:
-                    if not self.process_one_job():
+                    if not self.process_one_job() and not self.process_one_satire_submission():
                         self.plan_autonomously()
                         stop.wait(3)
                 except Exception:

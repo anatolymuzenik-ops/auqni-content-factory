@@ -75,6 +75,13 @@ SCHEMA = (
         CHECK(mix_type IN ('pure','problem','soft'))
     )""",
     "CREATE INDEX IF NOT EXISTS idx_satire_due ON satire_posts(status, scheduled_at)",
+    """CREATE TABLE IF NOT EXISTS satire_versions (
+        post_id TEXT NOT NULL, version INTEGER NOT NULL, text TEXT NOT NULL,
+        genre TEXT NOT NULL, topic TEXT NOT NULL, mix_type TEXT NOT NULL,
+        product_context TEXT, source TEXT NOT NULL, instruction TEXT,
+        created_at TEXT NOT NULL, PRIMARY KEY(post_id, version),
+        FOREIGN KEY(post_id) REFERENCES satire_posts(id)
+    )""",
     """CREATE TABLE IF NOT EXISTS satire_submissions (
         id INTEGER PRIMARY KEY AUTOINCREMENT, kind TEXT NOT NULL,
         text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'USER_SUBMISSION',
@@ -94,6 +101,19 @@ class Store:
         with self.connect() as db:
             for statement in SCHEMA:
                 db.execute(statement)
+            # The satire stream predates text versions and owner idea processing.
+            # Add only nullable/defaulted columns to the existing production tables.
+            for table, additions in {
+                "satire_posts": {"current_version": "INTEGER NOT NULL DEFAULT 1",
+                                 "origin": "TEXT NOT NULL DEFAULT 'bank'",
+                                 "source_submission_id": "INTEGER"},
+                "satire_submissions": {"target_post_id": "TEXT", "base_version": "INTEGER",
+                                       "result_post_id": "TEXT", "last_error": "TEXT"},
+            }.items():
+                existing = {row[1] for row in db.execute(f"PRAGMA table_info({table})")}
+                for name, definition in additions.items():
+                    if name not in existing:
+                        db.execute(f"ALTER TABLE {table} ADD COLUMN {name} {definition}")
 
     @contextmanager
     def connect(self):
