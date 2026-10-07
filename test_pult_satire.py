@@ -62,6 +62,34 @@ class SatireTests(unittest.TestCase):
         self.assertFalse(reuse_visual(old, {"text": "На аудите нашли новый процесс, которого раньше никто не видел.",
                                             "genre": "СМК-News", "topic": "Аудит"}))
 
+    def test_reject_image_card_prevents_publication(self):
+        class API:
+            def __init__(self):
+                self.calls = []
+
+            def call(self, method, payload, files=None):
+                self.calls.append((method, payload))
+                return {"message_id": 1}
+
+        with tempfile.TemporaryDirectory() as temp, patch.dict("os.environ", {"AUQNI_OWNER_USER_ID": "123"}):
+            root = Path(temp)
+            (root / "content").mkdir()
+            (root / "content/smk_satire_bank.json").write_bytes((ROOT / "content/smk_satire_bank.json").read_bytes())
+            api = API()
+            pult = Pult(root, json.loads((ROOT / "pult_config.json").read_text()), api)
+            before = datetime(2026, 10, 9, 4, 0, tzinfo=timezone.utc)
+            post_id = pult.satire.plan(before)[0][0]
+            job, _ = pult.satire.claim_visual()
+            pult.satire.finish_visual(post_id, job["version"], sample_visual(root))
+            pult.show_satire_review(post_id)
+            buttons = json.loads(api.calls[-1][1]["reply_markup"])["inline_keyboard"][0]
+            reject = next(b["callback_data"] for b in buttons if b["text"] == "Отклонить")
+            pult.handle_callback({"id": "reject", "from": {"id": 123}, "message": {"chat": {"id": 123}},
+                                  "data": reject})
+            self.assertEqual(pult.satire.get(post_id)["status"], "rejected")
+            pult.tick_satire(datetime(2026, 12, 1, tzinfo=timezone.utc))
+            self.assertFalse(any(payload.get("chat_id") == "@auqni_qms" for _, payload in api.calls))
+
     def test_bank_edit_keeps_versions_and_revokes_approval(self):
         with tempfile.TemporaryDirectory() as temp:
             stream = SatireStream(Store(Path(temp) / "pult.sqlite3"),
