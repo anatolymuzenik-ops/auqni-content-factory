@@ -11,6 +11,7 @@
 !/pult_core.py
 !/pult_planner.py
 !/pult_satire.py
+!/pult_schedule.py
 !/pult_store.py
 !/telegram_channel.py
 !/telegram_publish.py
@@ -18,6 +19,7 @@
 !/test_pult_planner.py
 !/test_pult_store.py
 !/test_pult_satire.py
+!/test_pult_schedule.py
 !/test_telegram_publish.py
 !/test_telegram_pult.py
 !/vk_publish.py

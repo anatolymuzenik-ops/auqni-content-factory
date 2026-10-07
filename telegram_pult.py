@@ -27,6 +27,7 @@ from pult_core import (PultError, Pipeline, iso_utc, moscow_zone,
                        snapshot_version, utc_now, validate_content)
 from pult_store import Store
 from pult_satire import SatireStream, review_label
+from pult_schedule import schedule_messages
 from telegram_channel import TelegramPublisher
 
 
@@ -195,7 +196,8 @@ class Pult:
 
     @staticmethod
     def permanent_keyboard():
-        return {"keyboard": [[{"text": "Создать пост"}, {"text": "Контент-план"}]],
+        return {"keyboard": [[{"text": "Создать пост"}, {"text": "Контент-план"}],
+                            [{"text": "Расписание"}]],
                 "resize_keyboard": True, "is_persistent": True}
 
     @staticmethod
@@ -287,6 +289,15 @@ class Pult:
         buttons += [[(f"Показать №{r['id']}", f"show:{r['id']}")] for r in scheduled[:5]]
         self.say("\n".join(lines), buttons)
 
+    def show_schedule(self, days=7, free_only=False, now=None):
+        pages = schedule_messages(self.store, self.schedule, self.config.get("smk_satire", {}),
+                                  days=days, free_only=free_only, now=now)
+        buttons = [[("7 дней", "schedule:7:all"), ("14 дней", "schedule:14:all")],
+                   [("Все слоты" if free_only else "Только свободные",
+                     f"schedule:{days}:{'all' if free_only else 'free'}")]]
+        for number, page in enumerate(pages):
+            self.say(page, buttons if number == len(pages) - 1 else None)
+
     def _input_from_message(self, message):
         parts = []
         text = message.get("text") or message.get("caption")
@@ -327,6 +338,9 @@ class Pult:
             return
         if text == "Контент-план":
             self.show_plan()
+            return
+        if text == "Расписание":
+            self.show_schedule()
             return
         show = re.fullmatch(r"Покажи\s+№?(\d+)", text, re.I)
         edit = re.fullmatch(r"Поправь\s+№?(\d+)\s*:\s*(.+)", text, re.I | re.S)
@@ -387,6 +401,10 @@ class Pult:
             return
         data = query.get("data", "")
         self.api.call("answerCallbackQuery", {"callback_query_id": query["id"]})
+        schedule = re.fullmatch(r"schedule:(7|14):(all|free)", data)
+        if schedule:
+            self.show_schedule(int(schedule.group(1)), schedule.group(2) == "free")
+            return
         if data.startswith("satire:"):
             if not self.satire:
                 raise PultError("Поток SMK_SATIRE выключен")
